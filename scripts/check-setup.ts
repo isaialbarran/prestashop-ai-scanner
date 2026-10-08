@@ -1,6 +1,6 @@
 // Verifica la fase 0: variables de .env.local presentes y Supabase accesible.
 // Nunca imprime valores de claves.
-import { ENV_KEYS, loadEnv, type EnvKey } from "../src/env";
+import { ENV_KEYS, envProblem, type EnvKey } from "../src/env";
 import { createServerClient } from "../src/db/supabase";
 
 // Claves de los proveedores LLM: no bloquean hasta la fase 2.
@@ -9,16 +9,14 @@ const PHASE_2_KEYS: readonly EnvKey[] = ["OPENAI_API_KEY", "GEMINI_API_KEY", "PE
 let ok = true;
 
 for (const key of ENV_KEYS) {
-  try {
-    loadEnv([key]);
+  const problem = envProblem(key);
+  if (!problem) {
     console.log(`✓ ${key}`);
-  } catch {
-    if (PHASE_2_KEYS.includes(key)) {
-      console.log(`· ${key} pendiente (fase 2)`);
-    } else {
-      ok = false;
-      console.log(`✗ ${key} ausente o inválida`);
-    }
+  } else if (PHASE_2_KEYS.includes(key) && problem === "ausente") {
+    console.log(`· ${key} pendiente (fase 2)`);
+  } else {
+    ok = false;
+    console.log(`✗ ${key}: ${problem}`);
   }
 }
 

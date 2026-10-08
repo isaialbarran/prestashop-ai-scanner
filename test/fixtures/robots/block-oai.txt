@@ -1,0 +1,8 @@
+User-agent: *
+Disallow: /*controller=cart
+
+User-agent: OAI-SearchBot
+Disallow: /
+
+User-agent: GPTBot
+Disallow: /
