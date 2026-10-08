@@ -57,6 +57,16 @@ describe("C2 Offer igual a lo visible", () => {
     expect(runCheck("C2", snapshot({ extracted: [visible(), visible(), visible()] }))).toMatchObject({ status: "pass", points: 12 });
   });
 
+  it("trata como iguales disponibilidades de la misma clase (InStock y LimitedAvailability)", () => {
+    const c = runCheck("C2", snapshot({ extracted: [visible({ availability: "LimitedAvailability" }), visible(), visible()] }));
+    expect(c).toMatchObject({ status: "pass", points: 12 });
+  });
+
+  it("marca la discrepancia entre disponible y agotado", () => {
+    const c = runCheck("C2", snapshot({ extracted: [visible({ availability: "OutOfStock" }), visible(), visible()] }));
+    expect(c.status).toBe("hint");
+  });
+
   it("resta el campo que no coincide", () => {
     const c = runCheck("C2", snapshot({ extracted: [visible({ price: 99.9 }), visible(), visible()] }));
     expect(c.status).toBe("hint");

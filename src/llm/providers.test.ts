@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { fixture } from "../../test/fixtures";
 import { costUsd } from "./cost";
 import { domainOf, openAISearchBody, openAIUsage, parseOpenAISearch } from "./openai";
-import { parsePerplexity, perplexityUsage } from "./perplexity";
+import { parsePerplexity, perplexityBody, perplexityUsage } from "./perplexity";
 
 const openai = () => JSON.parse(fixture("llm/openai-search.json"));
 const pplx = () => JSON.parse(fixture("llm/perplexity-agent.json"));
@@ -38,12 +38,22 @@ describe("Perplexity", () => {
     expect(a.consulted).toHaveLength(3);
   });
 
-  it("sin marcas, toma todos los resultados y lo indica", () => {
+  it("sin marcas no cuenta ninguna cita: los resultados solo son consultados", () => {
     const r = pplx();
     r.output[1].content[0].text = "Puedes comprarlas en Forum Sport o Decathlon.";
     const a = parsePerplexity(r, "perplexity/sonar");
-    expect(a.citationMode).toBe("all-results");
-    expect(a.cited).toHaveLength(3);
+    expect(a.citationMode).toBe("no-markers");
+    expect(a.cited).toEqual([]);
+    expect(a.consulted).toHaveLength(3);
+  });
+
+  it("usa el preset fast (citas [n]) con el modelo propio de Perplexity y ubicación España", () => {
+    expect(perplexityBody("perplexity/sonar", "x")).toEqual({
+      preset: "fast",
+      model: "perplexity/sonar",
+      input: "x",
+      tools: [{ type: "web_search", user_location: { country: "ES" } }],
+    });
   });
 
   it("usa el coste que informa la API y las invocaciones de búsqueda", () => {

@@ -46,8 +46,8 @@ export interface SearchAnswer {
   /** URLs que el buscador consultó, citadas o no. */
   consulted: Citation[];
   searchQueries: string[];
-  /** `markers`: Perplexity marcó las citas con [n]; `all-results`: no hubo marcas y se toman todos los resultados. */
-  citationMode: "annotations" | "markers" | "all-results";
+  /** `markers`: Perplexity marcó las citas con [n]; `no-markers`: no las marcó y no se cuenta ninguna cita por dominio. */
+  citationMode: "annotations" | "markers" | "no-markers";
 }
 
 export interface StructuredRequest<T> {

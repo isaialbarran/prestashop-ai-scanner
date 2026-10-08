@@ -39,7 +39,7 @@ export function reportContext(scan: ScanResult, visibility: VisibilityResult): s
     .filter((c) => c.maxPoints > 0 || c.status !== "inconclusive")
     .map((c) => {
       const notes = c.evidence
-        .slice(0, 2)
+        .slice(0, 4)
         .map((e) => e.note)
         .join(" / ");
       return `[${c.id}] ${c.title}: ${c.status}, ${c.points}/${c.maxPoints}. ${notes}${c.fix ? ` Arreglo: ${c.fix}` : ""}`;
@@ -54,7 +54,7 @@ export function reportContext(scan: ScanResult, visibility: VisibilityResult): s
     .map(([p, v]) => `${p} ${v!.cited}/${v!.total}`)
     .join(", ");
   return [
-    `Tienda: ${scan.domain}. Nota técnica: ${scan.score.final ?? "sin nota"}${scan.score.cap ? ` (topada en ${scan.score.cap}: ${scan.score.capReasons.join("; ")})` : ""}, tramo ${scan.score.band ?? "—"}, cobertura ${Math.round(scan.score.coverage * 100)} %.`,
+    `Tienda: ${scan.domain}. Fichas analizadas: ${scan.pages.products.length} (en los checks por ficha, cada evidencia es una ficha). Nota técnica: ${scan.score.final ?? "sin nota"}${scan.score.cap ? ` (topada en ${scan.score.cap}: ${scan.score.capReasons.join("; ")})` : ""}, tramo ${scan.score.band ?? "—"}, cobertura ${Math.round(scan.score.coverage * 100)} %.`,
     "",
     "Comprobaciones:",
     ...checks,
@@ -78,6 +78,7 @@ export async function writeReport(
       "Redactas el resumen de un informe técnico para el dueño de una tienda PrestaShop española, en español de España, claro y directo.",
       "Solo puedes usar los datos que se te dan. No inventes cifras, causas ni recomendaciones que no estén en los datos.",
       "Cada frase termina con la referencia entre corchetes del check o la consulta que la respalda, por ejemplo [C4] o [q3]. Una frase sin referencia se eliminará.",
+      "Cada referencia debe respaldar exactamente lo que dice su frase; no cites una consulta que no trate de lo que afirmas.",
     ].join(" "),
     user: [
       "Escribe:",

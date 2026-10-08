@@ -65,6 +65,27 @@ export function checkC1(ctx: ScanContext): Check {
   return check;
 }
 
+/** Clases de disponibilidad: dos valores de la misma clase dicen lo mismo a un comprador. */
+const AVAILABILITY_CLASS: Record<string, "disponible" | "no disponible" | "más adelante"> = {
+  InStock: "disponible",
+  LimitedAvailability: "disponible",
+  OnlineOnly: "disponible",
+  InStoreOnly: "disponible",
+  OutOfStock: "no disponible",
+  SoldOut: "no disponible",
+  Discontinued: "no disponible",
+  PreOrder: "más adelante",
+  PreSale: "más adelante",
+  BackOrder: "más adelante",
+};
+
+export function sameAvailability(markup: string | null, visible: string | null): boolean {
+  if (!markup || !visible) return false;
+  const a = AVAILABILITY_CLASS[markup];
+  const b = AVAILABILITY_CLASS[visible];
+  return a && b ? a === b : markup === visible;
+}
+
 export function checkC2(ctx: ScanContext): Check {
   const extracted = ctx.snap.extracted;
   if (!extracted) {
@@ -85,7 +106,7 @@ export function checkC2(ctx: ScanContext): Check {
       const fields = [
         ["precio", m.price, visible.price, m.price !== null && visible.price !== null && Math.abs(m.price - visible.price) < 0.01],
         ["moneda", m.currency, visible.currency, !!m.currency && m.currency.toUpperCase() === visible.currency?.toUpperCase()],
-        ["disponibilidad", m.availability, visible.availability, !!m.availability && m.availability === visible.availability],
+        ["disponibilidad", m.availability, visible.availability, sameAvailability(m.availability, visible.availability)],
       ] as const;
       return {
         score: fields.filter((f) => f[3]).length / fields.length,

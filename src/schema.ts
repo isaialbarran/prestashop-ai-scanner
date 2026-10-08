@@ -127,7 +127,7 @@ export const AnswerOutcomeSchema = z.object({
   storeUrls: z.array(z.string()),
   quote: z.string().nullable(),
   citedDomains: z.array(z.string()),
-  citationMode: z.enum(["annotations", "markers", "all-results"]).nullable(),
+  citationMode: z.enum(["annotations", "markers", "no-markers"]).nullable(),
   error: z.string().nullable(),
 });
 

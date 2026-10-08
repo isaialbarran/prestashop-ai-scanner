@@ -78,7 +78,7 @@ describe("createLiveLlm", () => {
     const { answer, call } = await llm.search({ provider: "perplexity", model: "perplexity/sonar", query: "dónde comprar" });
 
     expect(fetchImpl).toHaveBeenCalledTimes(2);
-    expect(JSON.parse(fetchImpl.mock.calls[0]![1].body)).toMatchObject({ model: "perplexity/sonar", tools: [{ type: "web_search", user_location: { country: "ES" } }] });
+    expect(JSON.parse(fetchImpl.mock.calls[0]![1].body)).toMatchObject({ preset: "fast", model: "perplexity/sonar", tools: [{ type: "web_search", user_location: { country: "ES" } }] });
     expect(fetchImpl.mock.calls[0]![1].headers.authorization).toBe("Bearer pplx-test");
     expect(answer.citationMode).toBe("markers");
     expect(call.costUsd).toBe(0.003725);

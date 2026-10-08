@@ -6,9 +6,14 @@ export const PERPLEXITY_ENDPOINT = "https://api.perplexity.ai/v1/agent";
 type Json = Record<string, unknown>;
 const arr = (v: unknown): Json[] => (Array.isArray(v) ? (v.filter((x) => x && typeof x === "object") as Json[]) : []);
 
-/** Petición a la Agent API con el modelo propio de Perplexity, búsqueda web y ubicación en España. */
+/**
+ * Petición a la Agent API. El preset `fast` aporta el prompt de sistema que obliga a citar con [n]
+ * (sin él, `perplexity/sonar` responde sin citas en línea); `model` lo sustituye por el modelo propio
+ * de Perplexity. `tools` sustituye el del preset para fijar la ubicación en España.
+ */
 export function perplexityBody(model: string, query: string) {
   return {
+    preset: "fast",
     model,
     input: query,
     tools: [{ type: "web_search", user_location: { country: "ES" } }],
@@ -34,7 +39,7 @@ export function perplexityUsage(response: unknown): { usage: Usage; reportedCost
 
 /**
  * La Agent API no devuelve un array de citas: el texto marca las fuentes con [n], que apuntan a `results[].id`.
- * Si no hay marcas, se toman todos los resultados como citados y se indica en `citationMode`.
+ * Si no hay marcas no se puede saber qué fuentes usa la respuesta: no hay citas y solo cuenta la mención por nombre.
  */
 export function parsePerplexity(response: unknown, model: string): SearchAnswer {
   const output = arr((response as Json).output);
@@ -54,16 +59,15 @@ export function parsePerplexity(response: unknown, model: string): SearchAnswer 
 
   const markers = new Set([...text.matchAll(/\[(\d+)\]/g)].map((m) => Number(m[1])));
   const marked = [...markers].map((id) => results.get(id)).filter((c): c is Citation => !!c);
-  const cited = marked.length ? marked : [...results.values()];
 
   return {
     provider: "perplexity",
     model,
     text,
-    cited: dedupe(cited),
+    cited: dedupe(marked),
     consulted: dedupe([...results.values()]),
     searchQueries: searchItems.flatMap((s) => (Array.isArray(s.queries) ? s.queries.map(String) : [])),
-    citationMode: marked.length ? "markers" : "all-results",
+    citationMode: marked.length ? "markers" : "no-markers",
   };
 }
 
