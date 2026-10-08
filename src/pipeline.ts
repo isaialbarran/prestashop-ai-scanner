@@ -15,6 +15,8 @@ export interface ReportOptions extends ScanOptions {
   /** Un ledger por informe: corta si el informe pasa de 2 €. */
   ledger: CostLedger;
   visibility?: VisibilityOptions;
+  /** Etiqueta y número de repetición (eval de estabilidad). */
+  run?: { tag: string | null; index: number | null };
 }
 
 /**
@@ -26,22 +28,7 @@ export async function runReport(input: string, opts: ReportOptions): Promise<{ r
   const { snapshot, errors } = await collectSnapshot(input, opts);
   if (snapshot.products.length === 0) throw new Error(`${snapshot.domain}: sin fichas de producto, no se puede generar el informe`);
 
-  const extraction = await Promise.all(
-    snapshot.products.map(async (p) => {
-      const res = p.fetches.browser?.[0] ?? null;
-      if (!res || res.status !== 200 || detectChallenge(res)) {
-        return { url: p.url, data: null, truncated: false, error: "la ficha no cargó para el navegador" };
-      }
-      try {
-        const { data, truncated } = await extractProduct(res, opts.llm);
-        return { url: p.url, data, truncated, error: null };
-      } catch (err) {
-        if (err instanceof BudgetExceededError) throw err;
-        return { url: p.url, data: null, truncated: false, error: err instanceof Error ? err.message : String(err) };
-      }
-    }),
-  );
-  snapshot.extracted = extraction.map((e) => e.data);
+  const extraction = await runExtraction(snapshot, opts.llm);
   const scan = evaluateSnapshot(snapshot, { fetcher: opts.fetcher, started, errors });
 
   const { queries } = await generateQueries(buildQueryContext(snapshot), opts.llm);
@@ -54,6 +41,7 @@ export async function runReport(input: string, opts: ReportOptions): Promise<{ r
     id: randomUUID(),
     domain: scan.domain,
     createdAt: new Date().toISOString(),
+    run: { tag: opts.run?.tag ?? null, index: opts.run?.index ?? null },
     scan,
     extraction,
     visibility,
@@ -68,4 +56,27 @@ export async function runReport(input: string, opts: ReportOptions): Promise<{ r
     latencyMs: Math.round(performance.now() - started),
   } satisfies ReportResult);
   return { result, snapshot };
+}
+
+export type ExtractionRow = ReportResult["extraction"][number];
+
+/** Extracción «como bot» de las fichas del snapshot; deja el resultado en `snapshot.extracted` para C2. */
+export async function runExtraction(snapshot: ScanSnapshot, llm: Llm): Promise<ExtractionRow[]> {
+  const extraction = await Promise.all(
+    snapshot.products.map(async (p): Promise<ExtractionRow> => {
+      const res = p.fetches.browser?.[0] ?? null;
+      if (!res || res.status !== 200 || detectChallenge(res)) {
+        return { url: p.url, data: null, truncated: false, error: "la ficha no cargó para el navegador" };
+      }
+      try {
+        const { data, truncated } = await extractProduct(res, llm);
+        return { url: p.url, data, truncated, error: null };
+      } catch (err) {
+        if (err instanceof BudgetExceededError) throw err;
+        return { url: p.url, data: null, truncated: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    }),
+  );
+  snapshot.extracted = extraction.map((e) => e.data);
+  return extraction;
 }

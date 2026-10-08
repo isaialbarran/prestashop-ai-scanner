@@ -105,6 +105,8 @@ export async function runVisibility(
           citedDomains: [...new Set(answer.cited.map((c) => c.domain))],
           citationMode: answer.citationMode,
           error: null,
+          text: answer.text,
+          citations: answer.cited.map((c) => ({ url: c.url, domain: c.domain })),
         };
       } catch (err) {
         if (err instanceof BudgetExceededError) throw err;

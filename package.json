@@ -14,7 +14,11 @@
     "check:setup": "tsx --env-file-if-exists=.env.local scripts/check-setup.ts",
     "batch": "tsx --env-file-if-exists=.env.local scripts/batch.ts",
     "validate": "tsx --env-file-if-exists=.env.local scripts/validate-domains.ts",
-    "report": "tsx --env-file-if-exists=.env.local scripts/report.ts"
+    "report": "tsx --env-file-if-exists=.env.local scripts/report.ts",
+    "eval": "vitest run --config vitest.eval.config.ts",
+    "eval:prepare": "tsx --env-file-if-exists=.env.local scripts/eval-prepare.ts",
+    "eval:import": "tsx --env-file-if-exists=.env.local scripts/eval-import.ts",
+    "label": "tsx --env-file-if-exists=.env.local scripts/label-detection.ts"
   },
   "packageManager": "pnpm@10.32.1",
   "engines": {

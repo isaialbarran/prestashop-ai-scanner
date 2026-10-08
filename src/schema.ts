@@ -129,6 +129,9 @@ export const AnswerOutcomeSchema = z.object({
   citedDomains: z.array(z.string()),
   citationMode: z.enum(["annotations", "markers", "no-markers"]).nullable(),
   error: z.string().nullable(),
+  /** Texto de la respuesta y URLs citadas: permiten repetir la detección en el eval. Ausentes en informes anteriores a la fase 3. */
+  text: z.string().nullable().optional(),
+  citations: z.array(z.object({ url: z.string(), domain: z.string() })).optional(),
 });
 
 export const VisibilityResultSchema = z.object({
@@ -154,6 +157,8 @@ export const ReportResultSchema = z.object({
   id: z.uuid(),
   domain: z.string(),
   createdAt: z.iso.datetime(),
+  /** Etiqueta del lote y número de repetición; null fuera de los evals. */
+  run: z.object({ tag: z.string().nullable(), index: z.number().int().nullable() }).default({ tag: null, index: null }),
   scan: ScanResultSchema,
   extraction: z.array(
     z.object({
