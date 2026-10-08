@@ -11,7 +11,8 @@ import { parseDomains } from "../src/batch/csv";
 import { runAllChecks } from "../src/checks/index";
 import { seededShuffle } from "../src/discover/sitemap";
 import { existsSync, readFileSync } from "node:fs";
-import { parseCsv, toCsv } from "../src/evals/csv";
+import { toCsv } from "../src/evals/csv";
+import { carryOverLabels } from "../src/evals/import";
 import { DATASETS_DIR, writeJsonl } from "../src/evals/datasets";
 import { listReports, loadSnapshot, type StoredReport } from "../src/evals/sources";
 import { detectChallenge } from "../src/fetch/challenge";
@@ -217,16 +218,7 @@ function evidenceFor(r: StoredReport["report"], ref: string): string {
 
 /** Al regenerar una plantilla se conserva lo ya etiquetado en las filas con el mismo id. */
 function keepLabels(file: string, rows: Record<string, unknown>[], labelColumns: string[]): number {
-  if (!existsSync(file)) return 0;
-  const previous = new Map(parseCsv(readFileSync(file, "utf8")).map((r) => [r.id, r]));
-  let kept = 0;
-  for (const row of rows) {
-    const old = previous.get(String(row.id));
-    if (!old || !labelColumns.some((c) => old[c])) continue;
-    for (const c of labelColumns) row[c] = old[c] ?? "";
-    kept++;
-  }
-  return kept;
+  return carryOverLabels(existsSync(file) ? readFileSync(file, "utf8") : null, rows, labelColumns);
 }
 
 function report(file: string, count: number, missing: string[], extra?: string) {

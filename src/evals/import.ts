@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { parseCsv } from "./csv";
 import { LABEL_SCHEMAS, type Kind } from "./datasets";
 
 /** Columnas de las plantillas (en español) → campos de las etiquetas. */
@@ -52,4 +53,18 @@ export function mergeById<T extends { id: string }>(existing: T[], incoming: T[]
   const map = new Map(existing.map((l) => [l.id, l]));
   for (const l of incoming) map.set(l.id, l);
   return [...map.values()];
+}
+
+/** Copia en `rows` las columnas de etiqueta ya rellenadas en la plantilla anterior (mismo id). Devuelve cuántas filas conservan algo. */
+export function carryOverLabels(previousCsv: string | null, rows: Record<string, unknown>[], labelColumns: string[]): number {
+  if (!previousCsv) return 0;
+  const previous = new Map(parseCsv(previousCsv).map((r) => [r.id, r]));
+  let kept = 0;
+  for (const row of rows) {
+    const old = previous.get(String(row.id));
+    if (!old || !labelColumns.some((c) => old[c])) continue;
+    for (const c of labelColumns) row[c] = old[c] ?? "";
+    kept++;
+  }
+  return kept;
 }
