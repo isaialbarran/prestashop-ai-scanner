@@ -21,8 +21,9 @@ export function textOf($: Doc, selector: string): string {
   return collapse($clone.text());
 }
 
+/** Colapsa espacios y quita los glifos de fuentes de iconos (área de uso privado de Unicode). */
 export function collapse(text: string): string {
-  return text.replace(/\s+/g, " ").trim();
+  return text.replace(/[-]/g, "").replace(/\s+/g, " ").trim();
 }
 
 export function bodyId($: Doc): string | null {
