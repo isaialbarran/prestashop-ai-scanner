@@ -40,20 +40,20 @@
     {
       "order": 5,
       "eval": "Estabilidad",
-      "dataset": "—",
+      "dataset": "10 tiendas × 3",
       "metric": "Variación de citedIn",
-      "value": "—",
+      "value": "rango medio 0.7 · σ media 0.33 · pares estables 96.5 %",
       "threshold": "Solo medir",
-      "status": "sin datos"
+      "status": "medido"
     },
     {
       "order": 6,
       "eval": "Coste y latencia",
-      "dataset": "1 informes (0 en frío)",
+      "dataset": "31 informes (10 en frío)",
       "metric": "€ y s por informe (p50 · p95)",
-      "value": "0,59 € · 0,59 €; — · —",
+      "value": "0,54 € · 0,59 €; 89 s · 129 s",
       "threshold": "p95 < 1 € y < 3 min",
-      "status": "falla"
+      "status": "ok"
     }
   ]
 }
