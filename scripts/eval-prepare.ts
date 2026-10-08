@@ -10,7 +10,8 @@ import { parseArgs } from "node:util";
 import { parseDomains } from "../src/batch/csv";
 import { runAllChecks } from "../src/checks/index";
 import { seededShuffle } from "../src/discover/sitemap";
-import { toCsv } from "../src/evals/csv";
+import { existsSync, readFileSync } from "node:fs";
+import { parseCsv, toCsv } from "../src/evals/csv";
 import { DATASETS_DIR, writeJsonl } from "../src/evals/datasets";
 import { listReports, loadSnapshot, type StoredReport } from "../src/evals/sources";
 import { detectChallenge } from "../src/fetch/challenge";
@@ -73,6 +74,8 @@ async function prepareChecks(domains: string[]) {
     }
   }
   const file = path.join(DATASETS_DIR, "checks.todo.csv");
+  const kept = keepLabels(file, rows, ["de_acuerdo", "estado_correcto", "nota"]);
+  if (kept) console.log(`  ${kept} filas conservan lo ya etiquetado`);
   await writeFile(file, toCsv(rows, ["id", "dominio", "check", "estado_escaner", "puntos", "evidencia", "urls", "de_acuerdo", "estado_correcto", "nota"]));
   report(file, rows.length, missing);
 }
@@ -119,6 +122,8 @@ async function prepareExtraction(domains: string[], n: number) {
     });
   }
   const file = path.join(DATASETS_DIR, "extraction.todo.csv");
+  const kept = keepLabels(file, rows, ["nombre", "precio", "moneda", "disponibilidad", "gtin", "marca", "revisada", "nota"]);
+  if (kept) console.log(`  ${kept} filas conservan lo ya etiquetado`);
   await writeFile(file, toCsv(rows, ["id", "dominio", "indice", "url", "vista_bot", "nombre", "precio", "moneda", "disponibilidad", "gtin", "marca", "revisada", "nota"]));
   report(file, rows.length, domains.filter((d) => !loadSnapshot(d)));
 }
@@ -192,6 +197,8 @@ async function prepareFidelity(n: number, from?: string) {
     );
   });
   const file = path.join(DATASETS_DIR, "fidelity.todo.csv");
+  const kept = keepLabels(file, rows, ["respaldada", "nota"]);
+  if (kept) console.log(`  ${kept} filas conservan lo ya etiquetado`);
   await writeFile(file, toCsv(rows, ["id", "informe", "dominio", "parte", "frase", "referencias", "evidencia", "respaldada", "nota"]));
   report(file, rows.length, [], `${picked.length} informes`);
 }
@@ -206,6 +213,20 @@ function evidenceFor(r: StoredReport["report"], ref: string): string {
     return `[${ref}] "${query.text}": ${detail}`;
   }
   return `[${ref}] no existe en este informe`;
+}
+
+/** Al regenerar una plantilla se conserva lo ya etiquetado en las filas con el mismo id. */
+function keepLabels(file: string, rows: Record<string, unknown>[], labelColumns: string[]): number {
+  if (!existsSync(file)) return 0;
+  const previous = new Map(parseCsv(readFileSync(file, "utf8")).map((r) => [r.id, r]));
+  let kept = 0;
+  for (const row of rows) {
+    const old = previous.get(String(row.id));
+    if (!old || !labelColumns.some((c) => old[c])) continue;
+    for (const c of labelColumns) row[c] = old[c] ?? "";
+    kept++;
+  }
+  return kept;
 }
 
 function report(file: string, count: number, missing: string[], extra?: string) {

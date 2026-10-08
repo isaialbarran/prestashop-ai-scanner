@@ -1,0 +1,59 @@
+{
+  "date": "2026-10-08",
+  "rows": [
+    {
+      "order": 1,
+      "eval": "Checks deterministas",
+      "dataset": "—",
+      "metric": "Discrepancias A2 · C2 · C3",
+      "value": "—",
+      "threshold": "< 3 en A2",
+      "status": "sin datos"
+    },
+    {
+      "order": 2,
+      "eval": "Extracción",
+      "dataset": "—",
+      "metric": "Acierto exacto por campo",
+      "value": "—",
+      "threshold": "≥ 95 % en precio",
+      "status": "sin datos"
+    },
+    {
+      "order": 3,
+      "eval": "Detección de citas",
+      "dataset": "—",
+      "metric": "Precisión · recall",
+      "value": "—",
+      "threshold": "≥ 0,9 ambas",
+      "status": "sin datos"
+    },
+    {
+      "order": 4,
+      "eval": "Fidelidad del informe",
+      "dataset": "—",
+      "metric": "% frases respaldadas",
+      "value": "—",
+      "threshold": "100 %",
+      "status": "sin datos"
+    },
+    {
+      "order": 5,
+      "eval": "Estabilidad",
+      "dataset": "—",
+      "metric": "Variación de citedIn",
+      "value": "—",
+      "threshold": "Solo medir",
+      "status": "sin datos"
+    },
+    {
+      "order": 6,
+      "eval": "Coste y latencia",
+      "dataset": "1 informes (0 en frío)",
+      "metric": "€ y s por informe (p50 · p95)",
+      "value": "0,59 € · 0,59 €; — · —",
+      "threshold": "p95 < 1 € y < 3 min",
+      "status": "falla"
+    }
+  ]
+}
