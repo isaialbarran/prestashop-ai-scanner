@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+<url><loc>https://tienda.test/</loc><priority>1.0</priority><changefreq>daily</changefreq></url>
+<url><loc>https://tienda.test/3-zapatillas</loc><priority>0.9</priority><changefreq>weekly</changefreq></url>
+<url><loc>https://tienda.test/4-mochilas</loc><priority>0.9</priority><changefreq>weekly</changefreq></url>
+<url><loc>https://tienda.test/zapatillas/12-zapatilla-trail-ligera-2.html</loc><priority>0.9</priority><image:image><image:loc>https://tienda.test/45-large_default/zapatilla-trail-ligera-2.jpg</image:loc></image:image></url>
+<url><loc>https://tienda.test/zapatillas/13-zapatilla-asfalto.html</loc><priority>0.9</priority><image:image><image:loc>https://tienda.test/46-large_default/zapatilla-asfalto.jpg</image:loc></image:image></url>
+<url><loc>https://tienda.test/mochilas/31-mochila-urbana-20l.html</loc><priority>0.9</priority></url>
+<url><loc>https://tienda.test/mochilas/32-1-mochila-trail-12l.html</loc><priority>0.9</priority></url>
+<url><loc>https://tienda.test/content/1-entrega</loc><priority>0.8</priority></url>
+<url><loc>https://tienda.test/2_montana</loc><priority>0.7</priority></url>
+<url><loc>https://tienda.test/index.php?id_product=40&amp;controller=product&amp;id_lang=1</loc></url>
+</urlset>
