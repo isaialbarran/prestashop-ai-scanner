@@ -42,20 +42,37 @@ export function normalizeDomain(input: string): string {
 
 export async function scanDomain(input: string, opts: ScanOptions): Promise<ScanOutput> {
   const started = performance.now();
-  const domain = normalizeDomain(input);
+  const { snapshot, errors } = await collectSnapshot(input, opts);
+  return { result: evaluateSnapshot(snapshot, { fetcher: opts.fetcher, started, errors }), snapshot };
+}
+
+/** Paso 1: todas las peticiones a la tienda. Lo que se descarga queda en el snapshot. */
+export async function collectSnapshot(input: string, opts: ScanOptions): Promise<{ snapshot: ScanSnapshot; errors: string[] }> {
   const errors: string[] = [];
-  const snapshot = await collect(domain, opts, errors);
+  const snapshot = await collect(normalizeDomain(input), opts, errors);
+  return { snapshot, errors };
+}
+
+/**
+ * Paso 2: checks y nota sobre el snapshot, sin red. La capa LLM rellena `snapshot.extracted`
+ * antes de llamar aquí para que C2 deje de ser inconcluso.
+ */
+export function evaluateSnapshot(
+  snapshot: ScanSnapshot,
+  ctx: { fetcher: Fetcher; started: number; errors: string[] },
+): ScanResult {
+  const errors = [...ctx.errors];
   const checks = runAllChecks(snapshot);
   const score = computeScore(checks);
   if (score.final === null && score.evaluated > 0) {
     errors.push(`Cobertura insuficiente (${Math.round(score.coverage * 100)} % de los puntos): sin nota`);
   }
   const platform = detectPlatform([snapshot.home, ...snapshot.products.map((p) => p.fetches.browser?.[0] ?? null)]);
-  const stats = opts.fetcher.stats();
+  const stats = ctx.fetcher.stats();
 
-  const result = ScanResultSchema.parse({
+  return ScanResultSchema.parse({
     id: randomUUID(),
-    domain,
+    domain: snapshot.domain,
     origin: snapshot.origin,
     scannedAt: new Date().toISOString(),
     scannerVersion: SCANNER_VERSION,
@@ -68,10 +85,9 @@ export async function scanDomain(input: string, opts: ScanOptions): Promise<Scan
     checks,
     score,
     requests: { network: stats.network, cached: stats.cached, budget: stats.budget },
-    durationMs: Math.round(performance.now() - started),
+    durationMs: Math.round(performance.now() - ctx.started),
     errors,
   } satisfies ScanResult);
-  return { result, snapshot };
 }
 
 async function collect(domain: string, opts: ScanOptions, errors: string[]): Promise<ScanSnapshot> {

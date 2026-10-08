@@ -1,0 +1,29 @@
+{
+  "id": "pplx_test",
+  "model": "perplexity/sonar",
+  "output": [
+    {
+      "type": "search_results",
+      "queries": ["dónde comprar zapatillas de trail en España"],
+      "results": [
+        { "id": 1, "url": "https://www.forum-sport.com/zapatillas-trail", "title": "Zapatillas trail | Forum Sport", "snippet": "...", "source": "web" },
+        { "id": 2, "url": "https://tienda.test/zapatillas/12-zapatilla-trail-ligera-2.html", "title": "Zapatilla trail Ligera 2", "snippet": "...", "source": "web" },
+        { "id": 3, "url": "https://www.decathlon.es/es/browse/zapatillas-trail", "title": "Decathlon trail", "snippet": "...", "source": "web" }
+      ]
+    },
+    {
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        { "type": "output_text", "text": "Puedes comprarlas en Forum Sport [1] o en Decathlon [3], que tienen envío a toda España." }
+      ]
+    }
+  ],
+  "usage": {
+    "input_tokens": 3100,
+    "output_tokens": 180,
+    "total_tokens": 3280,
+    "tool_calls_details": { "search_web": { "invocation": 1 } },
+    "cost": { "currency": "USD", "input_cost": 0.000775, "output_cost": 0.00045, "tool_calls_cost": 0.0025, "total_cost": 0.003725 }
+  }
+}
