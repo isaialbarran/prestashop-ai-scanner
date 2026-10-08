@@ -27,6 +27,9 @@ export function createFetcher(opts: FetcherOptions = {}): Fetcher {
   const maxBodyBytes = opts.maxBodyBytes ?? POLITENESS.maxBodyBytes;
   const maxRedirects = opts.maxRedirects ?? POLITENESS.maxRedirects;
   let cached = 0;
+  // Cortesía: tras varios errores de red seguidos el host nos está cortando; se deja de insistir.
+  let consecutiveNetworkErrors = 0;
+  const MAX_NETWORK_ERRORS = 3;
 
   async function network(url: string, agent: AgentId, attempt: number): Promise<FetchResult> {
     const base: FetchResult = {
@@ -114,7 +117,27 @@ export function createFetcher(opts: FetcherOptions = {}): Fetcher {
         cached++;
         return { ...hit, fromCache: true };
       }
+      if (consecutiveNetworkErrors >= MAX_NETWORK_ERRORS) {
+        return {
+          url,
+          finalUrl: url,
+          agent,
+          attempt,
+          status: null,
+          headers: {},
+          body: null,
+          bytes: 0,
+          truncated: false,
+          redirects: [],
+          ttfbMs: null,
+          totalMs: null,
+          fromCache: false,
+          error: `${MAX_NETWORK_ERRORS} errores de red seguidos: se dejan de enviar peticiones a este host`,
+        };
+      }
       const result = await network(url, agent, attempt);
+      if (result.status === null && result.error && !result.error.includes("presupuesto")) consecutiveNetworkErrors++;
+      else if (result.status !== null) consecutiveNetworkErrors = 0;
       if (!result.error) await opts.cache?.set(key, result);
       return result;
     },

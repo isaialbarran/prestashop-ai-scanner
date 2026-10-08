@@ -30,6 +30,7 @@ export interface ScanOutput {
 
 const MAX_SITEMAP_FETCHES = 3;
 const MAX_PRODUCT_REJECTS = 2;
+const MAX_NOT_PRODUCT = 4;
 
 export function normalizeDomain(input: string): string {
   return input
@@ -202,16 +203,22 @@ async function discoverUrls(snap: ScanSnapshot, robots: RobotsInfo, origin: stri
 
 async function pickProducts(tiers: string[][], seed: string, fetcher: Fetcher): Promise<ProductSnapshot[]> {
   const chosen: ProductSnapshot[] = [];
-  let rejects = 0;
+  let unreadable = 0;
+  let notProduct = 0;
   for (const url of tiers.flatMap((tier) => seededShuffle(tier, seed)).filter((u) => !isActionUrl(u))) {
     if (chosen.length >= THRESHOLDS.productsPerDomain) break;
     const res = await fetcher.get(url, "browser");
-    if (res.error?.includes("presupuesto")) break;
+    if (res.error?.includes("presupuesto") || res.error?.includes("dejan de enviar")) break;
     const page = analyzePage(res);
-    const looksLikeProduct = !!page && (page.bodyId === "product" || page.products.length > 0);
-    if (!looksLikeProduct && rejects < MAX_PRODUCT_REJECTS) {
-      rejects++;
+    // Si el tema pone body id, manda: los listados también llevan marcado Product (p. ej. una ficha
+    // descatalogada que redirige a su categoría). Esas páginas nunca se aceptan.
+    if (page?.bodyId && page.bodyId !== "product") {
+      if (++notProduct > MAX_NOT_PRODUCT) break;
       continue;
+    }
+    // Una página que no se puede leer (reto, error) se acepta tras dos intentos, para que A2 lo refleje.
+    if (!page || (!page.bodyId && page.products.length === 0)) {
+      if (unreadable++ < MAX_PRODUCT_REJECTS) continue;
     }
     chosen.push({ url, fetches: { browser: [res] } });
   }

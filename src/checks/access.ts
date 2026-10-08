@@ -52,13 +52,24 @@ export interface CrawlerVerdict {
   reason: string;
 }
 
-/** Compara la respuesta de un rastreador con la del navegador para la misma URL. */
-export function crawlerVerdict(browser: FetchResult | null, crawler: FetchResult | null): CrawlerVerdict {
+/**
+ * Compara la respuesta de un rastreador con la del navegador para la misma URL.
+ * `browserFailsLater`: las peticiones del navegador posteriores también fallaron por red; un fallo de red
+ * del rastreador no se puede atribuir entonces a su user-agent (suele ser un límite por IP).
+ */
+export function crawlerVerdict(
+  browser: FetchResult | null,
+  crawler: FetchResult | null,
+  opts: { browserFailsLater?: boolean } = {},
+): CrawlerVerdict {
   if (!browser || browser.status !== 200 || detectChallenge(browser)) {
     return { ok: null, reason: "el navegador tampoco recibe la ficha" };
   }
   if (!crawler || crawler.status === null) {
-    if (crawler?.error?.includes("presupuesto")) return { ok: null, reason: crawler.error };
+    if (crawler?.error?.includes("presupuesto") || crawler?.error?.includes("dejan de enviar")) return { ok: null, reason: crawler.error };
+    if (opts.browserFailsLater) {
+      return { ok: null, reason: `${crawler?.error ?? "sin respuesta"}; el navegador también falla después (posible límite por IP)` };
+    }
     return { ok: false, kind: "origen", reason: crawler?.error ?? "sin respuesta" };
   }
   const challenge = detectChallenge(crawler);
@@ -76,6 +87,11 @@ export function crawlerVerdict(browser: FetchResult | null, crawler: FetchResult
   const scope = mainSelector(browser);
   const ratio = textLength(crawler, scope) / Math.max(1, textLength(browser, scope));
   if (ratio < THRESHOLDS.a2MinTextRatio) {
+    // Googlebot se identifica como móvil y el navegador de referencia como escritorio: muchos temas sirven otra
+    // plantilla con menos texto. Si el rastreador recibe la misma ficha (mismo título y precio visible), le llega.
+    if (sameProduct(browser, crawler)) {
+      return { ok: true, reason: `la misma ficha con otra plantilla (${Math.round(ratio * 100)} % del texto${scope ? ` de ${scope}` : ""})` };
+    }
     return {
       ok: false,
       kind: "origen",
@@ -85,8 +101,20 @@ export function crawlerVerdict(browser: FetchResult | null, crawler: FetchResult
   return { ok: true, reason: `200 con el ${Math.min(100, Math.round(ratio * 100))} % del texto` };
 }
 
+function sameProduct(browser: FetchResult, crawler: FetchResult): boolean {
+  const a = analyzePage(browser)?.signals;
+  const b = analyzePage(crawler)?.signals;
+  if (!a?.name || !b?.name) return false;
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+  return norm(a.name) === norm(b.name) && (!a.price || !!b.price);
+}
+
 export function checkA2(ctx: ScanContext): Check {
   if (ctx.products.length === 0) return inconclusive("A2", ctx.snap.origin ?? ctx.snap.domain, "No se encontraron fichas de producto");
+
+  // Peticiones del navegador posteriores a las de los rastreadores (ver scan.ts): si todas fallan por red, el host nos cortó por IP.
+  const later = [ctx.snap.category, ctx.snap.facets.order, ctx.snap.facets.q, ctx.snap.ucp, ctx.snap.llms].filter((r): r is FetchResult => !!r);
+  const browserFailsLater = later.length > 0 && later.every((r) => r.status === null);
 
   const perAgent: Partial<Record<AgentId, CheckStatus>> = {};
   const blockKind: Partial<Record<AgentId, BlockKind>> = {};
@@ -96,7 +124,7 @@ export function checkA2(ctx: ScanContext): Check {
   for (const agent of CRAWLERS) {
     const pairs = ctx.products.map((p) => {
       const attempts = p.fetches[agent] ?? [];
-      const verdicts = attempts.map((a) => crawlerVerdict(p.browser, a));
+      const verdicts = attempts.map((a) => crawlerVerdict(p.browser, a, { browserFailsLater }));
       if (verdicts.some((v) => v.ok === true)) return { ok: true as const, last: attempts.at(-1)!, v: verdicts.find((v) => v.ok)! };
       if (verdicts.length === 0 || verdicts.some((v) => v.ok === null)) {
         return { ok: null, last: attempts.at(-1) ?? null, v: verdicts.at(-1) ?? { ok: null, reason: "sin petición" } };
