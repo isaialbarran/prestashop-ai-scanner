@@ -1,6 +1,5 @@
 // Escanea un CSV de dominios y devuelve un ScanResult por dominio.
 // Uso: pnpm batch <dominios.csv> [--no-cache] [--no-db] [--limit N] [--keep-html] [--out dir]
-import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
@@ -12,7 +11,7 @@ import { createServerClient } from "../src/db/supabase";
 import { loadEnv } from "../src/env";
 import { createDiskCache } from "../src/fetch/cache";
 import { createFetcher } from "../src/fetch/client";
-import { fetchPageSpeed, type PageSpeedResult } from "../src/fetch/pagespeed";
+import { pageSpeedRunner } from "../src/fetch/pagespeed-runner";
 import { scanDomain } from "../src/scan";
 import type { ScanResult } from "../src/schema";
 
@@ -78,30 +77,6 @@ function tryDb() {
     console.warn("Supabase sin configurar: los resultados solo se guardan en JSON.");
     return null;
   }
-}
-
-function pageSpeedRunner(useCache: boolean): ((url: string) => Promise<PageSpeedResult>) | null {
-  let key: string;
-  try {
-    key = loadEnv(["PAGESPEED_API_KEY"]).PAGESPEED_API_KEY;
-  } catch {
-    console.warn("Sin PAGESPEED_API_KEY: E2 quedará inconcluso.");
-    return null;
-  }
-  const dir = path.join(process.cwd(), ".cache", "pagespeed");
-  return async (url) => {
-    const file = path.join(dir, `${createHash("sha256").update(url).digest("hex")}.json`);
-    if (useCache) {
-      const hit = await readFile(file, "utf8").then(JSON.parse, () => null);
-      if (hit) return hit as PageSpeedResult;
-    }
-    const result = await fetchPageSpeed(url, key);
-    if (useCache && !result.error) {
-      await mkdir(dir, { recursive: true });
-      await writeFile(file, JSON.stringify(result));
-    }
-    return result;
-  };
 }
 
 function printSummary(rows: Row[]) {

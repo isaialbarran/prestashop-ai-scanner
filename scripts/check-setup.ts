@@ -1,19 +1,19 @@
-// Verifica la fase 0: variables de .env.local presentes y Supabase accesible.
-// Nunca imprime valores de claves.
+// Verifica el entorno: variables de .env.local presentes y válidas, Supabase accesible
+// y claves de OpenAI y Perplexity aceptadas por su API. Nunca imprime valores de claves.
 import { ENV_KEYS, envProblem, type EnvKey } from "../src/env";
 import { createServerClient } from "../src/db/supabase";
 
-// Claves de los proveedores LLM: no bloquean hasta la fase 2.
-const PHASE_2_KEYS: readonly EnvKey[] = ["OPENAI_API_KEY", "GEMINI_API_KEY", "PERPLEXITY_API_KEY"];
+// Gemini queda fuera hasta revisar los términos de Grounding with Google Search (config/models.ts).
+const UNUSED: readonly EnvKey[] = ["GEMINI_API_KEY"];
 
 let ok = true;
 
 for (const key of ENV_KEYS) {
   const problem = envProblem(key);
-  if (!problem) {
+  if (UNUSED.includes(key)) {
+    console.log(`· ${key} no se usa (Gemini fuera hasta revisar sus términos)`);
+  } else if (!problem) {
     console.log(`✓ ${key}`);
-  } else if (PHASE_2_KEYS.includes(key) && problem === "ausente") {
-    console.log(`· ${key} pendiente (fase 2)`);
   } else {
     ok = false;
     console.log(`✗ ${key}: ${problem}`);
@@ -28,6 +28,26 @@ try {
 } catch (err) {
   ok = false;
   console.log(`✗ Supabase: ${err instanceof Error ? err.message : String(err)}`);
+}
+
+// Listar modelos es gratis y confirma que cada clave es de su proveedor.
+for (const [name, key, url] of [
+  ["OpenAI", "OPENAI_API_KEY", "https://api.openai.com/v1/models"],
+  ["Perplexity", "PERPLEXITY_API_KEY", "https://api.perplexity.ai/v1/models"],
+] as const) {
+  if (envProblem(key)) continue;
+  try {
+    const res = await fetch(url, { headers: { authorization: `Bearer ${process.env[key]!.trim()}` }, signal: AbortSignal.timeout(15_000) });
+    if (res.ok) {
+      console.log(`✓ ${name} acepta la clave`);
+    } else {
+      ok = false;
+      console.log(`✗ ${name} rechaza la clave (${res.status})`);
+    }
+  } catch (err) {
+    ok = false;
+    console.log(`✗ ${name}: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 process.exit(ok ? 0 : 1);

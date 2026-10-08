@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "check:setup": "tsx --env-file-if-exists=.env.local scripts/check-setup.ts",
     "batch": "tsx --env-file-if-exists=.env.local scripts/batch.ts",
-    "validate": "tsx --env-file-if-exists=.env.local scripts/validate-domains.ts"
+    "validate": "tsx --env-file-if-exists=.env.local scripts/validate-domains.ts",
+    "report": "tsx --env-file-if-exists=.env.local scripts/report.ts"
   },
   "packageManager": "pnpm@10.32.1",
   "engines": {
@@ -23,6 +24,7 @@
     "@supabase/supabase-js": "^2.117.3",
     "cheerio": "^1.2.0",
     "next": "16.4.0",
+    "openai": "^7.30.1",
     "p-limit": "^7.3.3",
     "react": "19.3.0",
     "react-dom": "19.3.0",
