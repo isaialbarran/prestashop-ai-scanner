@@ -3,10 +3,10 @@ import { analyzePage } from "../checks/context";
 import { sameSite } from "../checks/helpers";
 import { detectPlatform } from "../checks/info";
 import { interpretRobots } from "../discover/robots";
-import { classifyUrl, parseSitemap, preferLanguage } from "../discover/sitemap";
+import { candidateCount, collectCandidates } from "../discover/candidates";
+import { parseSitemap, preferLanguage } from "../discover/sitemap";
 import { detectChallenge } from "../fetch/challenge";
 import type { FetchResult, Fetcher } from "../fetch/types";
-import { absoluteUrl } from "../parse/html";
 
 /** Si un dominio sirve para el lote: responde, es PrestaShop, vende en español y tiene fichas localizables. */
 export interface DomainAssessment {
@@ -42,7 +42,10 @@ export function assess(domain: string, home: FetchResult | null, sitemaps: Fetch
   if (!home || home.status === null) return { ...base, reasons: [`no responde (${home?.error ?? "sin respuesta"})`] };
 
   const challenge = detectChallenge(home);
-  if (challenge) warnings.push(`la portada devuelve un ${challenge.kind === "challenge" ? "reto" : "bloqueo"} de ${challenge.vendor}`);
+  if (challenge) {
+    const vendor = challenge.vendor === "generic" ? "un sistema antibots" : challenge.vendor;
+    warnings.push(`la portada devuelve un ${challenge.kind === "challenge" ? "reto" : "bloqueo"} de ${vendor}`);
+  }
   if (home.status !== 200 && !challenge) reasons.push(`la portada responde ${home.status}`);
   if (home.redirects.length && !sameSite(home.url, home.finalUrl)) warnings.push(`redirige a otro dominio (${home.finalUrl})`);
 
@@ -51,23 +54,16 @@ export function assess(domain: string, home: FetchResult | null, sitemaps: Fetch
   if (platform.prestashop && !platform.version) warnings.push("versión no identificable");
 
   const page = analyzePage(home);
-  const lang = page?.$("html").attr("lang")?.toLowerCase() ?? null;
-  const spanish = !!lang?.startsWith("es") || /\/es(\/|$)/.test(home.finalUrl);
-  if (page && !spanish) reasons.push(`idioma de la portada: ${lang ?? "sin declarar"}`);
+  const lang = page?.$("html").attr("lang")?.toLowerCase() ?? home.headers["content-language"]?.toLowerCase() ?? null;
+  if (page && !lang && !/\/es(\/|$)/.test(home.finalUrl)) warnings.push("la portada no declara idioma");
+  else if (page && lang && !lang.startsWith("es") && !/\/es(\/|$)/.test(home.finalUrl)) reasons.push(`idioma de la portada: ${lang}`);
 
-  const products = new Set<string>();
-  let sitemap = false;
-  for (const res of sitemaps) {
-    const doc = parseSitemap(res.status === 200 ? res.body : null);
-    if (doc.kind !== "invalid") sitemap = true;
-    for (const e of doc.entries) if (classifyUrl(e.loc, e.hasImage) === "product") products.add(e.loc);
-  }
-  page?.$("a[href]").each((_, a) => {
-    const url = absoluteUrl(page.$(a).attr("href"), page.url);
-    if (url && classifyUrl(url) === "product") products.add(url.split("#")[0]!);
-  });
-  if (!sitemap) warnings.push("sin sitemap: las fichas salen de los enlaces de la portada");
-  if (page && products.size < THRESHOLDS.productsPerDomain) reasons.push(`solo ${products.size} fichas localizables`);
+  const docs = sitemaps.map((res) => parseSitemap(res.status === 200 ? res.body : null));
+  const sitemap = docs.some((d) => d.kind !== "invalid");
+  const origin = new URL(home.finalUrl).origin;
+  const productUrls = candidateCount(collectCandidates(docs, page, origin));
+  if (!sitemap) warnings.push("sin sitemap: las fichas salen de la portada");
+  if (page && productUrls < THRESHOLDS.productsPerDomain) reasons.push(`solo ${productUrls} fichas localizables`);
 
   return {
     ...base,
@@ -75,7 +71,7 @@ export function assess(domain: string, home: FetchResult | null, sitemaps: Fetch
     version: platform.version ?? (platform.prestashop ? "?" : null),
     lang,
     sitemap,
-    productUrls: products.size,
+    productUrls,
   };
 }
 

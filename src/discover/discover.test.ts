@@ -82,7 +82,17 @@ describe("sitemap", () => {
   it("acepta categorías con prefijo de idioma y descarta CMS y marcas", () => {
     expect(classifyUrl("https://t.test/es/3-zapatillas")).toBe("category");
     expect(classifyUrl("https://t.test/content/1-entrega")).toBe("other");
+    expect(classifyUrl("https://t.test/es/content/3-terminos-y-condiciones-de-uso")).toBe("other");
     expect(classifyUrl("https://t.test/2_montana")).toBe("other");
+  });
+
+  it("reconoce fichas con id bajo una categoría aunque no acaben en .html", () => {
+    expect(classifyUrl("https://sulion.test/inicio/143-dask")).toBe("product");
+    expect(classifyUrl("https://sulion.test/es/inicio/24010-fuente-tira-led-ip20-100w")).toBe("product");
+  });
+
+  it("deja como other las URLs sin id", () => {
+    expect(classifyUrl("https://jocca.test/cafetera-espresso-semiautomatica-20-bar")).toBe("other");
   });
 
   it("marca como inválido lo que no es un sitemap", () => {

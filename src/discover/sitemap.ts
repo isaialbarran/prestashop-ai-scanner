@@ -41,7 +41,14 @@ export function preferLanguage(locs: string[], lang = "es"): string[] {
 
 export type UrlKind = "product" | "category" | "other";
 
-/** Clasifica URLs con las rutas por defecto de PrestaShop. */
+/** Primeros segmentos que nunca son fichas ni categorías (CMS, módulos, blog). */
+const NON_CATALOG = new Set(["content", "contenido", "cms", "module", "modules", "blog", "img", "themes"]);
+
+/**
+ * Clasifica URLs con las rutas de PrestaShop: por defecto `{categoría/}{id}-{slug}.html` para fichas y
+ * `{id}-{slug}` para categorías, y también la variante de ficha sin `.html` bajo una categoría.
+ * Las URLs sin id (módulos de URL amigables) quedan como `other`: se buscan por las miniaturas de la portada.
+ */
 export function classifyUrl(url: string, hasImage = false): UrlKind {
   let u: URL;
   try {
@@ -53,13 +60,15 @@ export function classifyUrl(url: string, hasImage = false): UrlKind {
   if (q.get("controller") === "product" || q.has("id_product")) return "product";
   if (q.get("controller") === "category" || q.has("id_category")) return "category";
 
-  const segments = u.pathname.split("/").filter(Boolean);
-  const last = segments.at(-1) ?? "";
+  const all = u.pathname.split("/").filter(Boolean);
+  const segments = all.length > 1 && /^[a-z]{2}$/.test(all[0]!) ? all.slice(1) : all;
+  if (segments.length === 0 || NON_CATALOG.has(segments[0]!.toLowerCase())) return "other";
+  const last = segments.at(-1)!;
+
   if (/^\d+(-\d+)?-[^/]+\.html$/.test(last)) return "product";
   if (hasImage && last.endsWith(".html")) return "product";
-
-  const withoutLang = segments.length === 2 && /^[a-z]{2}$/.test(segments[0]!) ? segments.slice(1) : segments;
-  if (withoutLang.length === 1 && /^\d+-[^/.]+$/.test(withoutLang[0]!)) return "category";
+  if (segments.length >= 2 && /^\d+(-\d+)?-[^/.]+$/.test(last)) return "product";
+  if (segments.length === 1 && /^\d+-[^/.]+$/.test(last)) return "category";
   return "other";
 }
 

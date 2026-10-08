@@ -46,6 +46,11 @@ describe("detectChallenge", () => {
     expect(detectChallenge(page(200, html))).toBeNull();
   });
 
+  it("detecta una página de espera 202 que se recarga sola", () => {
+    const html = `<!DOCTYPE html><head><meta http-equiv='refresh' content='3'><title>tienda.es</title></head><body><div class="loading">...</div></body>`;
+    expect(detectChallenge(page(202, html, { server: "HTTPd" }))).toEqual({ vendor: "generic", kind: "challenge" });
+  });
+
   it("no marca un 403 del propio servidor sin firma de cortafuegos", () => {
     expect(detectChallenge(page(403, "<h1>Forbidden</h1>", { server: "nginx" }))).toBeNull();
   });

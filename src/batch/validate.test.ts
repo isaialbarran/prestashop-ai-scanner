@@ -12,7 +12,7 @@ const sitemaps = [fr(`${ORIGIN}/1_index_sitemap.xml`, 200, fixture("sitemap/inde
 describe("assess", () => {
   it("acepta una tienda PrestaShop en español con fichas en el sitemap", () => {
     const a = assess("tienda.test", home(fixture("html/home.html")), sitemaps);
-    expect(a).toMatchObject({ valid: true, version: "1.7 o posterior", lang: "es", sitemap: true, productUrls: 5 });
+    expect(a).toMatchObject({ valid: true, version: "1.7 o posterior", lang: "es", sitemap: true, productUrls: 6 });
     expect(a.reasons).toEqual([]);
   });
 
@@ -34,10 +34,16 @@ describe("assess", () => {
     expect(a.warnings[0]).toMatch(/reto de cloudflare/);
   });
 
+  it("solo avisa si la portada no declara idioma", () => {
+    const a = assess("tienda.test", home(fixture("html/home.html").replace(' lang="es"', "")), sitemaps);
+    expect(a.valid).toBe(true);
+    expect(a.warnings).toContain("la portada no declara idioma");
+  });
+
   it("descarta si no hay fichas localizables", () => {
     const a = assess("tienda.test", home(fixture("html/home.html")), []);
-    expect(a.productUrls).toBe(1);
-    expect(a.reasons).toContain("solo 1 fichas localizables");
+    expect(a.productUrls).toBe(2);
+    expect(a.reasons).toContain("solo 2 fichas localizables");
   });
 });
 

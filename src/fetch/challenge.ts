@@ -41,6 +41,11 @@ export function detectChallenge(res: ResponseLike): Challenge | null {
     return { vendor: "akamai", kind: "block" };
   }
 
+  // Página de espera que se recarga sola (p. ej. 202 + meta refresh): comprueba cookies o JavaScript antes de servir la tienda.
+  if (res.status === 202 && body.length < 5000 && /http-equiv=["']refresh/i.test(body)) {
+    return { vendor: "generic", kind: "challenge" };
+  }
+
   if (isError && /g-recaptcha|h-captcha|hcaptcha\.com|cf-turnstile/i.test(body)) {
     return { vendor: "generic", kind: "challenge" };
   }

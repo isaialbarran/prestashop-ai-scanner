@@ -8,7 +8,8 @@ import { runAllChecks } from "./checks/index";
 import { detectPlatform } from "./checks/info";
 import type { ProductSnapshot, ScanSnapshot } from "./checks/types";
 import { crawlDelayMs, interpretRobots, robotsVerdict, type RobotsInfo } from "./discover/robots";
-import { classifyUrl, parseSitemap, preferLanguage, seededShuffle } from "./discover/sitemap";
+import { candidateCount, categoryFromProductPage, collectCandidates, type Candidates } from "./discover/candidates";
+import { parseSitemap, preferLanguage, seededShuffle, type SitemapDoc } from "./discover/sitemap";
 import type { PageSpeedResult } from "./fetch/pagespeed";
 import type { Fetcher } from "./fetch/types";
 import { absoluteUrl } from "./parse/html";
@@ -112,13 +113,13 @@ async function collect(domain: string, opts: ScanOptions, errors: string[]): Pro
     log(`Crawl-delay ${delay / 1000} s`);
   }
 
-  // 3. Sitemap → URLs candidatas; si no hay, enlaces de la portada.
-  const { products: productUrls, categories } = await discoverUrls(snap, robots, origin, fetcher);
-  log(`${productUrls.length} fichas y ${categories.length} categorías candidatas`);
-  if (productUrls.length === 0) errors.push("No se encontraron fichas de producto en el sitemap ni en la portada");
+  // 3. Sitemap y portada → fichas candidatas por niveles de fiabilidad.
+  const candidates = await discoverUrls(snap, robots, origin, fetcher);
+  log(`${candidateCount(candidates)} fichas y ${candidates.categories.length} categorías candidatas`);
+  if (candidateCount(candidates) === 0) errors.push("No se encontraron fichas de producto en el sitemap ni en la portada");
 
   // 4. Tres fichas confirmadas con el navegador.
-  snap.products = await pickProducts(productUrls, domain, fetcher);
+  snap.products = await pickProducts(candidates.productTiers, domain, fetcher);
   const psi = opts.pagespeed?.(snap.products[0]?.url ?? home.finalUrl);
 
   // 5. Primer intento de cada rastreador.
@@ -126,7 +127,15 @@ async function collect(domain: string, opts: ScanOptions, errors: string[]): Pro
     for (const agent of CRAWLERS) p.fetches[agent] = [await fetcher.get(p.url, agent)];
   }
 
-  // 6. Categoría y URLs de filtros (D3).
+  // 6. Categoría (del sitemap o, si no hay, de las migas de una ficha) y URLs de filtros (D3).
+  let categories = candidates.categories;
+  if (categories.length === 0) {
+    const fromBreadcrumb = snap.products
+      .map((p) => analyzePage(p.fetches.browser?.[0] ?? null))
+      .map((page) => (page ? categoryFromProductPage(page, origin) : null))
+      .find((u): u is string => u !== null);
+    if (fromBreadcrumb) categories = [fromBreadcrumb];
+  }
   for (const url of seededShuffle(categories, domain).slice(0, 2)) {
     snap.category = await fetcher.get(url, "browser");
     if (snap.category.status === 200) break;
@@ -150,16 +159,11 @@ async function collect(domain: string, opts: ScanOptions, errors: string[]): Pro
   return snap;
 }
 
-async function discoverUrls(
-  snap: ScanSnapshot,
-  robots: RobotsInfo,
-  origin: string,
-  fetcher: Fetcher,
-): Promise<{ products: string[]; categories: string[] }> {
+async function discoverUrls(snap: ScanSnapshot, robots: RobotsInfo, origin: string, fetcher: Fetcher): Promise<Candidates> {
   const declared = robots.kind === "parsed" ? robots.sitemaps.filter((s) => sameSite(s, origin)) : [];
   const queue = declared.length ? [...declared] : [`${origin}/1_index_sitemap.xml`, `${origin}/sitemap.xml`];
-  const products = new Set<string>();
-  const categories = new Set<string>();
+  const docs: SitemapDoc[] = [];
+  const home = analyzePage(snap.home);
 
   while (queue.length && snap.sitemaps.length < MAX_SITEMAP_FETCHES) {
     const res = await fetcher.get(queue.shift()!, "browser");
@@ -169,33 +173,17 @@ async function discoverUrls(
       queue.splice(0, queue.length, ...preferLanguage(doc.entries.map((e) => e.loc)));
       continue;
     }
-    for (const e of doc.entries) {
-      if (!sameSite(e.loc, origin)) continue;
-      const kind = classifyUrl(e.loc, e.hasImage);
-      if (kind === "product") products.add(e.loc);
-      else if (kind === "category") categories.add(e.loc);
-    }
-    if (doc.kind === "urlset" && products.size >= THRESHOLDS.productsPerDomain * 2 && categories.size > 0) break;
+    docs.push(doc);
+    const found = collectCandidates(docs, null, origin);
+    if ((found.productTiers[0]?.length ?? 0) >= THRESHOLDS.productsPerDomain * 2 && found.categories.length > 0) break;
   }
-
-  if (products.size === 0 || categories.size === 0) {
-    const home = analyzePage(snap.home);
-    home?.$("a[href]").each((_, a) => {
-      const url = absoluteUrl(home.$(a).attr("href"), home.url);
-      if (!url || !sameSite(url, origin)) return;
-      const clean = url.split("#")[0]!;
-      const kind = classifyUrl(clean);
-      if (kind === "product" && products.size < 50) products.add(clean);
-      if (kind === "category" && categories.size < 50) categories.add(clean);
-    });
-  }
-  return { products: [...products], categories: [...categories] };
+  return collectCandidates(docs, home, origin);
 }
 
-async function pickProducts(candidates: string[], seed: string, fetcher: Fetcher): Promise<ProductSnapshot[]> {
+async function pickProducts(tiers: string[][], seed: string, fetcher: Fetcher): Promise<ProductSnapshot[]> {
   const chosen: ProductSnapshot[] = [];
   let rejects = 0;
-  for (const url of seededShuffle(candidates, seed)) {
+  for (const url of tiers.flatMap((tier) => seededShuffle(tier, seed))) {
     if (chosen.length >= THRESHOLDS.productsPerDomain) break;
     const res = await fetcher.get(url, "browser");
     if (res.error?.includes("presupuesto")) break;
