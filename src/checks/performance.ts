@@ -1,15 +1,18 @@
 import { THRESHOLDS } from "../../config/scanner";
+import { detectChallenge } from "../fetch/challenge";
 import type { FieldMetric } from "../fetch/pagespeed";
 import type { Check } from "../schema";
 import type { ScanContext } from "./context";
 import { inconclusive, makeCheck, statusFromScores } from "./helpers";
 
 export function checkE1(ctx: ScanContext): Check {
+  // Solo respuestas reales de la ficha: un reto de WAF responde rápido y falsearía el TTFB.
   const samples = ctx.products
-    .map((p) => p.browser?.ttfbMs)
+    .filter((p) => p.browser?.status === 200 && !detectChallenge(p.browser))
+    .map((p) => p.browser!.ttfbMs)
     .filter((t): t is number => typeof t === "number");
   const url = ctx.products[0]?.url ?? ctx.snap.origin ?? ctx.snap.domain;
-  if (samples.length === 0) return inconclusive("E1", url, "Ninguna ficha respondió al navegador");
+  if (samples.length === 0) return inconclusive("E1", url, "Ninguna ficha respondió con 200 al navegador");
 
   const sorted = [...samples].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);

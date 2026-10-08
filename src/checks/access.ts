@@ -4,7 +4,7 @@ import { robotsVerdict } from "../discover/robots";
 import { detectChallenge } from "../fetch/challenge";
 import type { FetchResult } from "../fetch/types";
 import type { BlockKind, Check, CheckStatus, Evidence } from "../schema";
-import { analyzePage, textLength, type PageAnalysis, type ScanContext } from "./context";
+import { analyzePage, mainSelector, textLength, type PageAnalysis, type ScanContext } from "./context";
 import { evidenceFrom, inconclusive, makeCheck, pathOf, sameSite, statusFromScores } from "./helpers";
 
 export function checkA1(ctx: ScanContext): Check {
@@ -73,9 +73,14 @@ export function crawlerVerdict(browser: FetchResult | null, crawler: FetchResult
   if (pathOf(crawler.finalUrl) !== pathOf(browser.finalUrl)) {
     return { ok: false, kind: "origen", reason: `redirige a ${crawler.finalUrl}` };
   }
-  const ratio = textLength(crawler) / Math.max(1, textLength(browser));
+  const scope = mainSelector(browser);
+  const ratio = textLength(crawler, scope) / Math.max(1, textLength(browser, scope));
   if (ratio < THRESHOLDS.a2MinTextRatio) {
-    return { ok: false, kind: "origen", reason: `recibe el ${Math.round(ratio * 100)} % del texto que ve el navegador` };
+    return {
+      ok: false,
+      kind: "origen",
+      reason: `recibe el ${Math.round(ratio * 100)} % del texto${scope ? ` de ${scope}` : ""} que ve el navegador`,
+    };
   }
   return { ok: true, reason: `200 con el ${Math.min(100, Math.round(ratio * 100))} % del texto` };
 }
@@ -149,7 +154,7 @@ interface Wall {
 }
 
 function findWall(res: FetchResult | null, page: PageAnalysis | null, isProduct: boolean): Wall | null {
-  if (!res) return null;
+  if (!res || detectChallenge(res)) return null;
   const at = (note: string): Wall => ({ url: res.finalUrl, res, note });
   if (res.redirects.length && !sameSite(res.url, res.finalUrl)) return at(`redirige a otro dominio (${res.finalUrl})`);
   if (res.status === 503 || page?.bodyId === "maintenance" || page?.$(".page-maintenance").length) {
@@ -158,7 +163,7 @@ function findWall(res: FetchResult | null, page: PageAnalysis | null, isProduct:
   if ((res.redirects.length && LOGIN_URL.test(res.finalUrl)) || page?.bodyId === "authentication") {
     return at(`redirige al login (${res.finalUrl})`);
   }
-  if (isProduct && page && page.signals.name && !page.signals.price && !page.signals.addToCart) {
+  if (isProduct && page && page.signals.name && !page.signals.price && (page.isCatalog || !page.signals.addToCart)) {
     return at(`modo catálogo: la ficha no muestra precio ni botón de compra${page.isCatalog ? " (is_catalog activo)" : ""}`);
   }
   if (res.status === 451) return at("bloqueo legal o por país (451)");
@@ -182,16 +187,36 @@ export function checkA3(ctx: ScanContext): Check {
       fix: "Quita el muro para los visitantes anónimos: desactiva el modo mantenimiento o el modo catálogo, no obligues a iniciar sesión para ver las fichas y no redirijas por país sin dejar acceder a la versión española.",
     });
   }
+
+  // Sin muro reconocible: solo cuentan las páginas que el navegador recibió de verdad (200 y sin reto).
+  const loaded = (p: (typeof pages)[number]) => p.res?.status === 200 && !detectChallenge(p.res);
+  const products = pages.filter((p) => p.isProduct);
+  const loadedProducts = products.filter(loaded);
+  const blocked = products.find((p) => p.res && !loaded(p));
+  const blockedNote = blocked?.res
+    ? `${products.length - loadedProducts.length} fichas no cargan para el navegador (${describeBlock(blocked.res)})`
+    : null;
+  if (loadedProducts.length === 0) {
+    return inconclusive("A3", blocked?.res?.finalUrl ?? ctx.snap.origin ?? ctx.snap.domain, blockedNote ?? "No hay fichas que evaluar");
+  }
+  const homeLoaded = loaded(pages[0]!);
   return makeCheck("A3", {
     status: "pass",
     score: 1,
     evidence: [
-      evidenceFrom(ctx.snap.home, `La portada y ${fetched.length - (ctx.snap.home ? 1 : 0)} fichas cargan sin muro`, {
-        url: ctx.snap.home?.finalUrl ?? ctx.products[0]?.url,
-      }),
+      evidenceFrom(
+        loadedProducts[0]!.res,
+        `${homeLoaded ? "La portada y " : ""}${loadedProducts.length} fichas cargan sin muro${blockedNote ? `; ${blockedNote}` : ""}`,
+      ),
     ],
     fix: null,
   });
+}
+
+function describeBlock(res: FetchResult): string {
+  const challenge = detectChallenge(res);
+  if (challenge) return `${res.status}, ${challenge.kind === "challenge" ? "reto" : "bloqueo"} de ${challenge.vendor}`;
+  return res.status === null ? (res.error ?? "sin respuesta") : String(res.status);
 }
 
 function titleOrText(res: FetchResult | null): string | undefined {

@@ -36,12 +36,14 @@ const DESCRIPTION_SELECTORS = [
   "#idTab1",
   ".product__description",
 ];
+// Botones, no el formulario: el tema classic pinta #add-to-cart-or-refresh también en modo catálogo.
 const ADD_TO_CART_SELECTORS = [
-  "#add-to-cart-or-refresh",
   "[data-button-action=add-to-cart]",
+  "#add_to_cart button",
   "#add_to_cart",
   "#buy_block button[type=submit]",
-  ".add-to-cart",
+  "button.add-to-cart",
+  "a.add-to-cart",
 ];
 
 const CURRENCY_AMOUNT = /(?:\d{1,3}(?:[.\s ]\d{3})*|\d+)[.,]\d{2}\s?(?:€|EUR)|€\s?\d+(?:[.,]\d{2})?/i;

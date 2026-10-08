@@ -23,7 +23,7 @@ if (!csvPath) {
 const domains = parseDomains(await readFile(csvPath, "utf8"));
 const cache = values["no-cache"] ? null : createDiskCache();
 const limit = pLimit(POLITENESS.parallelDomains);
-console.log(`Validando ${domains.length} dominios (${POLITENESS.parallelDomains} en paralelo, como mucho 4 peticiones por dominio)…\n`);
+console.log(`Validando ${domains.length} dominios (${POLITENESS.parallelDomains} en paralelo, como mucho 5 peticiones por dominio)…\n`);
 
 const results: DomainAssessment[] = await Promise.all(
   domains.map((d) =>

@@ -87,6 +87,15 @@ describe("E1 TTFB", () => {
     expect(runCheck("E1", withTtfb([300, 500, 900]))).toMatchObject({ status: "pass", points: 4 });
   });
 
+  it("ignora el TTFB de las respuestas con reto de WAF", () => {
+    const products = PRODUCT_URLS.map((url) =>
+      product(url, classicAt(url), {
+        browser: [fr(url, 403, fixture("html/cloudflare-challenge.html"), { ttfbMs: 50, headers: { "cf-mitigated": "challenge" } })],
+      }),
+    );
+    expect(runCheck("E1", snapshot({ products })).status).toBe("inconclusive");
+  });
+
   it("falla con mediana de 800 ms o más", () => {
     const c = runCheck("E1", withTtfb([900, 1200, 300]));
     expect(c).toMatchObject({ status: "fail", points: 0 });

@@ -61,6 +61,14 @@ describe("computeScore", () => {
     expect(computeScore(checks({ A1: { status: "hint", points: 6.67, perAgent: { perplexitybot: "fail" } } })).cap).toBeNull();
   });
 
+  it("no da nota con menos del 50 % de cobertura", () => {
+    const inconclusive = { status: "inconclusive" as const, points: 0 };
+    const s = computeScore(checks({ A2: inconclusive, B1: inconclusive, B2: inconclusive, C1: inconclusive, C2: inconclusive, C3: inconclusive, C4: inconclusive, C5: inconclusive, D2: inconclusive }));
+    expect(s.coverage).toBeCloseTo(0.32, 2);
+    expect(s.normalized).toBe(100);
+    expect(s).toMatchObject({ final: null, band: null });
+  });
+
   it("deja la nota en null si nada es concluyente", () => {
     const all = Object.fromEntries(CHECK_IDS.map((id) => [id, { status: "inconclusive" as const, points: 0 }]));
     expect(computeScore(checks(all))).toMatchObject({ final: null, band: null, coverage: 0 });

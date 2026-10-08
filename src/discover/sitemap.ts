@@ -41,6 +41,23 @@ export function preferLanguage(locs: string[], lang = "es"): string[] {
 
 export type UrlKind = "product" | "category" | "other";
 
+const ACTION_PARAMS = ["add", "delete", "token", "qty", "op", "action", "ajax", "back", "submitAddress"];
+const ACTION_CONTROLLERS = /^(cart|order|order-confirmation|authentication|my-account|password|history|identity|addresses|address|guest-tracking|module-.*)$/i;
+const ACTION_PATHS = /\/(carrito|carro-de-la-compra|cart|pedido|order|checkout|iniciar-sesion|inicio-sesion|login|mi-cuenta|my-account|direccion|recuperar-contrasena)(\/|$|\?)/i;
+
+/** URLs que ejecutan una acción (añadir al carrito, login, pedido…): el escáner nunca las pide. */
+export function isActionUrl(url: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return true;
+  }
+  if (ACTION_PARAMS.some((p) => u.searchParams.has(p))) return true;
+  if (ACTION_CONTROLLERS.test(u.searchParams.get("controller") ?? "")) return true;
+  return ACTION_PATHS.test(u.pathname);
+}
+
 /** Primeros segmentos que nunca son fichas ni categorías (CMS, módulos, blog). */
 const NON_CATALOG = new Set(["content", "contenido", "cms", "module", "modules", "blog", "img", "themes"]);
 
@@ -56,9 +73,10 @@ export function classifyUrl(url: string, hasImage = false): UrlKind {
   } catch {
     return "other";
   }
+  if (isActionUrl(url)) return "other";
   const q = u.searchParams;
-  if (q.get("controller") === "product" || q.has("id_product")) return "product";
-  if (q.get("controller") === "category" || q.has("id_category")) return "category";
+  if (q.get("controller") === "product" && q.has("id_product")) return "product";
+  if (q.get("controller") === "category" && q.has("id_category")) return "category";
 
   const all = u.pathname.split("/").filter(Boolean);
   const segments = all.length > 1 && /^[a-z]{2}$/.test(all[0]!) ? all.slice(1) : all;

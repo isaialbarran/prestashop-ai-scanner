@@ -12,6 +12,15 @@ describe("productLinksFromPage", () => {
   it("lee las miniaturas aunque la URL no tenga id y quita el fragmento de combinación", () => {
     expect(productLinksFromPage(home(), ORIGIN)).toEqual(["https://tienda.test/zapatilla-sin-id"]);
   });
+
+  it("ignora el botón de añadir al carrito de 1.6 aunque lleve data-id-product", () => {
+    const html = `<html><body><ul class="product_list">
+      <li class="ajax_block_product"><a class="product_img_link" href="${ORIGIN}/basic/71-fitmask-black.html">img</a>
+      <a class="button ajax_add_to_cart_button" href="http://tienda.test/carro-de-la-compra?add=1&amp;id_product=71&amp;token=abc" data-id-product="71">Añadir</a></li>
+    </ul></body></html>`;
+    const c = collectCandidates([], page(`${ORIGIN}/`, html), ORIGIN);
+    expect(c.productTiers.flat()).toEqual([`${ORIGIN}/basic/71-fitmask-black.html`]);
+  });
 });
 
 describe("categoryFromProductPage", () => {

@@ -2,7 +2,7 @@ import type { AgentId } from "../../config/agents";
 import { interpretRobots, type RobotsInfo } from "../discover/robots";
 import { parseSitemap } from "../discover/sitemap";
 import type { FetchResult } from "../fetch/types";
-import { bodyId, canonicalOf, hreflangOf, loadHtml, metaRobots, visibleText, type Doc } from "../parse/html";
+import { bodyId, canonicalOf, hreflangOf, loadHtml, metaRobots, textOf, visibleText, type Doc } from "../parse/html";
 import { productsOf, type ProductMarkup } from "../parse/product";
 import { extractStructuredData, type StructuredData } from "../parse/structured";
 import { visibleSignals, type VisibleSignals } from "../parse/visible";
@@ -79,14 +79,31 @@ export function buildContext(snap: ScanSnapshot): ScanContext {
   };
 }
 
-const textLengths = new WeakMap<FetchResult, number>();
+const MAIN_SELECTORS = ["#main", "main", "#center_column", "#content", "[role=main]"];
 
-/** Longitud del texto visible de una respuesta (memoizada). */
-export function textLength(res: FetchResult): number {
-  let n = textLengths.get(res);
+/** Selector del contenido principal de una página (sin cabecera, pie ni banners), o null si no hay. */
+export function mainSelector(res: FetchResult): string | null {
+  if (!res.body) return null;
+  const $ = loadHtml(res.body);
+  return MAIN_SELECTORS.find((sel) => $(sel).length > 0) ?? null;
+}
+
+const textLengths = new WeakMap<FetchResult, Map<string, number>>();
+
+/**
+ * Longitud del texto visible de una respuesta, dentro de `selector` si se da (memoizada).
+ * A2 compara el contenido principal para que los banners de cookies, que no se muestran a los bots, no cuenten.
+ */
+export function textLength(res: FetchResult, selector: string | null = null): number {
+  let bySelector = textLengths.get(res);
+  if (!bySelector) textLengths.set(res, (bySelector = new Map()));
+  const key = selector ?? "";
+  let n = bySelector.get(key);
   if (n === undefined) {
-    n = res.body ? visibleText(res.body).length : 0;
-    textLengths.set(res, n);
+    if (!res.body) n = 0;
+    else if (!selector) n = visibleText(res.body).length;
+    else n = textOf(loadHtml(res.body), selector).length;
+    bySelector.set(key, n);
   }
   return n;
 }

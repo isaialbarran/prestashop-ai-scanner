@@ -91,6 +91,15 @@ describe("sitemap", () => {
     expect(classifyUrl("https://sulion.test/es/inicio/24010-fuente-tira-led-ip20-100w")).toBe("product");
   });
 
+  it("nunca clasifica como ficha una URL de acción (carrito, login, pedido)", () => {
+    expect(classifyUrl("http://www.fitmask.test/carro-de-la-compra?add=1&id_product=100&token=aa5d")).toBe("other");
+    expect(classifyUrl("https://t.test/index.php?controller=cart&add=1&id_product=3")).toBe("other");
+    expect(classifyUrl("https://t.test/carrito?id_product=3")).toBe("other");
+    expect(classifyUrl("https://t.test/index.php?id_product=3")).toBe("other");
+    expect(classifyUrl("https://t.test/index.php?id_product=40&controller=product&id_lang=1")).toBe("product");
+    expect(classifyUrl("https://t.test/piel/4285-cartera-mediana-mujer.html")).toBe("product");
+  });
+
   it("deja como other las URLs sin id", () => {
     expect(classifyUrl("https://jocca.test/cafetera-espresso-semiautomatica-20-bar")).toBe("other");
   });

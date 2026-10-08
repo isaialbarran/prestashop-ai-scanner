@@ -9,7 +9,7 @@ import { detectPlatform } from "./checks/info";
 import type { ProductSnapshot, ScanSnapshot } from "./checks/types";
 import { crawlDelayMs, interpretRobots, robotsVerdict, type RobotsInfo } from "./discover/robots";
 import { candidateCount, categoryFromProductPage, collectCandidates, type Candidates } from "./discover/candidates";
-import { parseSitemap, preferLanguage, seededShuffle, type SitemapDoc } from "./discover/sitemap";
+import { isActionUrl, parseSitemap, preferLanguage, seededShuffle, type SitemapDoc } from "./discover/sitemap";
 import type { PageSpeedResult } from "./fetch/pagespeed";
 import type { Fetcher } from "./fetch/types";
 import { absoluteUrl } from "./parse/html";
@@ -46,6 +46,10 @@ export async function scanDomain(input: string, opts: ScanOptions): Promise<Scan
   const errors: string[] = [];
   const snapshot = await collect(domain, opts, errors);
   const checks = runAllChecks(snapshot);
+  const score = computeScore(checks);
+  if (score.final === null && score.evaluated > 0) {
+    errors.push(`Cobertura insuficiente (${Math.round(score.coverage * 100)} % de los puntos): sin nota`);
+  }
   const platform = detectPlatform([snapshot.home, ...snapshot.products.map((p) => p.fetches.browser?.[0] ?? null)]);
   const stats = opts.fetcher.stats();
 
@@ -62,7 +66,7 @@ export async function scanDomain(input: string, opts: ScanOptions): Promise<Scan
       products: snapshot.products.map((p) => p.url),
     },
     checks,
-    score: computeScore(checks),
+    score,
     requests: { network: stats.network, cached: stats.cached, budget: stats.budget },
     durationMs: Math.round(performance.now() - started),
     errors,
@@ -183,7 +187,7 @@ async function discoverUrls(snap: ScanSnapshot, robots: RobotsInfo, origin: stri
 async function pickProducts(tiers: string[][], seed: string, fetcher: Fetcher): Promise<ProductSnapshot[]> {
   const chosen: ProductSnapshot[] = [];
   let rejects = 0;
-  for (const url of tiers.flatMap((tier) => seededShuffle(tier, seed))) {
+  for (const url of tiers.flatMap((tier) => seededShuffle(tier, seed)).filter((u) => !isActionUrl(u))) {
     if (chosen.length >= THRESHOLDS.productsPerDomain) break;
     const res = await fetcher.get(url, "browser");
     if (res.error?.includes("presupuesto")) break;

@@ -4,7 +4,7 @@ import { sameSite } from "../checks/helpers";
 import { detectPlatform } from "../checks/info";
 import { interpretRobots } from "../discover/robots";
 import { candidateCount, collectCandidates } from "../discover/candidates";
-import { parseSitemap, preferLanguage } from "../discover/sitemap";
+import { parseSitemap, preferLanguage, seededShuffle } from "../discover/sitemap";
 import { detectChallenge } from "../fetch/challenge";
 import type { FetchResult, Fetcher } from "../fetch/types";
 
@@ -24,7 +24,12 @@ export interface DomainAssessment {
   productUrls: number;
 }
 
-export function assess(domain: string, home: FetchResult | null, sitemaps: FetchResult[]): DomainAssessment {
+export function assess(
+  domain: string,
+  home: FetchResult | null,
+  sitemaps: FetchResult[],
+  sampleProduct: FetchResult | null = null,
+): DomainAssessment {
   const reasons: string[] = [];
   const warnings: string[] = [];
   const base: DomainAssessment = {
@@ -65,6 +70,19 @@ export function assess(domain: string, home: FetchResult | null, sitemaps: Fetch
   if (!sitemap) warnings.push("sin sitemap: las fichas salen de la portada");
   if (page && productUrls < THRESHOLDS.productsPerDomain) reasons.push(`solo ${productUrls} fichas localizables`);
 
+  // Algunos WAF dejan pasar la portada y retan en las fichas.
+  if (sampleProduct) {
+    const productChallenge = detectChallenge(sampleProduct);
+    if (productChallenge) {
+      const vendor = productChallenge.vendor === "generic" ? "un sistema antibots" : productChallenge.vendor;
+      reasons.push(`las fichas devuelven un ${productChallenge.kind === "challenge" ? "reto" : "bloqueo"} de ${vendor}`);
+    } else if (sampleProduct.status !== 200) {
+      reasons.push(`la ficha de prueba responde ${sampleProduct.status ?? sampleProduct.error}`);
+    } else if (analyzePage(sampleProduct)?.isCatalog) {
+      warnings.push("modo catálogo: las fichas no muestran precio (A3 fallará)");
+    }
+  }
+
   return {
     ...base,
     valid: reasons.length === 0 && !challenge,
@@ -75,7 +93,7 @@ export function assess(domain: string, home: FetchResult | null, sitemaps: Fetch
   };
 }
 
-/** Pide la portada, robots.txt y el sitemap (y su primer hijo si es un índice): como mucho 4 peticiones más redirecciones. */
+/** Pide la portada, robots.txt, el sitemap (y su primer hijo si es un índice) y una ficha: como mucho 5 peticiones más redirecciones. */
 export async function validateDomain(domain: string, fetcher: Fetcher): Promise<DomainAssessment> {
   let home = await fetcher.get(`https://${domain}/`, "browser");
   if (home.status === null) {
@@ -96,5 +114,11 @@ export async function validateDomain(domain: string, fetcher: Fetcher): Promise<
   if (doc.kind === "index" && doc.entries.length) {
     sitemaps.push(await fetcher.get(preferLanguage(doc.entries.map((e) => e.loc))[0]!, "browser"));
   }
-  return assess(domain, home, sitemaps);
+  const candidates = collectCandidates(
+    sitemaps.map((res) => parseSitemap(res.status === 200 ? res.body : null)),
+    analyzePage(home),
+    origin,
+  );
+  const sample = candidates.productTiers.flatMap((tier) => seededShuffle(tier, domain))[0];
+  return assess(domain, home, sitemaps, sample ? await fetcher.get(sample, "browser") : null);
 }

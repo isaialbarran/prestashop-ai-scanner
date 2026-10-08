@@ -92,6 +92,15 @@ describe("A2 misma respuesta para rastreadores", () => {
     expect(c.blockKind?.["chatgpt-user"]).toBe("origen");
   });
 
+  it("compara el contenido principal: un banner de cookies que solo ve el navegador no es un fallo", () => {
+    const banner = `<div id="cookiesplus-modal"><p>${"Usamos cookies propias y de terceros para analizar tus hábitos. ".repeat(80)}</p></div>`;
+    const products = PRODUCT_URLS.map((url) =>
+      product(url, classicAt(url), { browser: [fr(url, 200, classicAt(url).replace("</body>", `${banner}</body>`))] }),
+    );
+    const c = runCheck("A2", snapshot({ products }));
+    expect(c).toMatchObject({ status: "pass", points: 15 });
+  });
+
   it("es inconcluso si el navegador tampoco entra", () => {
     const products = PRODUCT_URLS.map((url) => product(url, challenge, {}));
     for (const p of products) {
@@ -127,6 +136,17 @@ describe("A3 muro previo", () => {
     const c = runCheck("A3", snapshot({ products }));
     expect(c.status).toBe("fail");
     expect(c.evidence.some((e) => /catálogo/.test(e.note))).toBe(true);
+  });
+
+  it("no da por cargadas las fichas que devuelven un reto al navegador", () => {
+    const products = PRODUCT_URLS.map((url) =>
+      product(url, classicAt(url), {
+        browser: [fr(url, 403, challenge, { headers: { server: "cloudflare", "cf-mitigated": "challenge" } })],
+      }),
+    );
+    const c = runCheck("A3", snapshot({ products }));
+    expect(c.status).toBe("inconclusive");
+    expect(c.evidence[0]?.note).toMatch(/3 fichas no cargan para el navegador \(403, reto de cloudflare\)/);
   });
 
   it("detecta la redirección a otro dominio", () => {

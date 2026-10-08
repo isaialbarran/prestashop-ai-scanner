@@ -1,7 +1,7 @@
 import type { PageAnalysis } from "../checks/context";
 import { sameSite } from "../checks/helpers";
 import { absoluteUrl } from "../parse/html";
-import { classifyUrl, type SitemapDoc } from "./sitemap";
+import { classifyUrl, isActionUrl, type SitemapDoc } from "./sitemap";
 
 export interface Candidates {
   /** Fichas por niveles de fiabilidad; se baraja dentro de cada nivel y se recorren en orden. */
@@ -23,12 +23,12 @@ export function productLinksFromPage(page: PageAnalysis, origin: string): string
       .find("a[href]")
       .toArray()
       .map((a) => absoluteUrl($(a).attr("href"), page.url))
-      .find((u) => u?.startsWith("http") && sameSite(u, origin));
+      .find((u) => u?.startsWith("http") && sameSite(u, origin) && !isActionUrl(u));
     if (href) links.add(clean(href));
   });
   $("a.product_img_link[href], .product-name a[href]").each((_, a) => {
     const href = absoluteUrl($(a).attr("href"), page.url);
-    if (href && sameSite(href, origin)) links.add(clean(href));
+    if (href && sameSite(href, origin) && !isActionUrl(href)) links.add(clean(href));
   });
   return [...links];
 }
@@ -62,7 +62,7 @@ export function collectCandidates(docs: SitemapDoc[], home: PageAnalysis | null,
   const categories = new Set<string>();
   for (const doc of docs) {
     for (const e of doc.entries) {
-      if (!sameSite(e.loc, origin)) continue;
+      if (!sameSite(e.loc, origin) || isActionUrl(e.loc)) continue;
       const kind = classifyUrl(e.loc, e.hasImage);
       if (kind === "product") byPattern.add(clean(e.loc));
       else if (kind === "category") categories.add(clean(e.loc));

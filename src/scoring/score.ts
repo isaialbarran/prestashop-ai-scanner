@@ -1,5 +1,5 @@
 import { AGENTS, CAP_AGENTS } from "../../config/agents";
-import { BANDS, SCORE_CAP } from "../../config/scanner";
+import { BANDS, MIN_COVERAGE, SCORE_CAP } from "../../config/scanner";
 import { round2 } from "../checks/helpers";
 import type { Band, Check, Score } from "../schema";
 
@@ -10,6 +10,7 @@ export function bandFor(score: number): Band {
 /**
  * Nota técnica:
  * - Los checks inconclusos no cuentan: la nota se reescala sobre los puntos evaluados y se publica la cobertura.
+ *   Con cobertura por debajo de MIN_COVERAGE no hay nota (final y band a null).
  * - Tope de 40 si A1 bloquea a OAI-SearchBot o a Googlebot, o si A2 falla para ellos por rechazo del propio
  *   servidor. Un fallo de A2 con firma de WAF es un indicio (el WAF puede verificar por IP) y no topa.
  */
@@ -32,7 +33,8 @@ export function computeScore(checks: Check[]): Score {
   }
   const cap = capReasons.length ? SCORE_CAP : null;
   const normalized = evaluated > 0 ? (100 * earned) / evaluated : null;
-  const final = normalized === null ? null : Math.min(Math.round(normalized), cap ?? 100);
+  const enoughCoverage = possible > 0 && evaluated / possible >= MIN_COVERAGE;
+  const final = normalized === null || !enoughCoverage ? null : Math.min(Math.round(normalized), cap ?? 100);
 
   return {
     earned: round2(earned),

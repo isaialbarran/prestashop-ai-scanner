@@ -40,6 +40,22 @@ describe("assess", () => {
     expect(a.warnings).toContain("la portada no declara idioma");
   });
 
+  it("descarta la tienda si las fichas devuelven un reto aunque la portada cargue", () => {
+    const sample = fr(`${ORIGIN}/zapatillas/12-zapatilla-trail-ligera-2.html`, 403, fixture("html/cloudflare-challenge.html"), {
+      headers: { "cf-mitigated": "challenge" },
+    });
+    const a = assess("tienda.test", home(fixture("html/home.html")), sitemaps, sample);
+    expect(a.valid).toBe(false);
+    expect(a.reasons).toContain("las fichas devuelven un reto de cloudflare");
+  });
+
+  it("avisa del modo catálogo sin descartar", () => {
+    const sample = fr(`${ORIGIN}/lampara.html`, 200, fixture("html/product-catalog-mode.html"));
+    const a = assess("tienda.test", home(fixture("html/home.html")), sitemaps, sample);
+    expect(a.valid).toBe(true);
+    expect(a.warnings).toContain("modo catálogo: las fichas no muestran precio (A3 fallará)");
+  });
+
   it("descarta si no hay fichas localizables", () => {
     const a = assess("tienda.test", home(fixture("html/home.html")), []);
     expect(a.productUrls).toBe(2);
@@ -48,7 +64,7 @@ describe("assess", () => {
 });
 
 describe("validateDomain", () => {
-  it("hace como mucho 4 peticiones y lee el sitemap del idioma español", async () => {
+  it("hace como mucho 5 peticiones: portada, robots, sitemap, sitemap en español y una ficha", async () => {
     const pages: Record<string, string> = {
       [`${ORIGIN}/`]: fixture("html/home.html"),
       [`${ORIGIN}/robots.txt`]: fixture("robots/allow-all.txt"),
@@ -58,11 +74,13 @@ describe("validateDomain", () => {
     const urls: string[] = [];
     const fetchImpl: FetchImpl = async (url) => {
       urls.push(url);
+      if (/\.html$|id_product=/.test(url)) return new Response(fixture("html/product-classic.html"));
       return pages[url] ? new Response(pages[url]) : new Response("404", { status: 404 });
     };
     const fetcher = createFetcher({ fetchImpl, limiter: new DomainLimiter({ minIntervalMs: 0, budget: 40 }) });
     const a = await validateDomain("tienda.test", fetcher);
     expect(a.valid).toBe(true);
-    expect(urls).toEqual([`${ORIGIN}/`, `${ORIGIN}/robots.txt`, `${ORIGIN}/1_index_sitemap.xml`, `${ORIGIN}/1_es_0_sitemap.xml`]);
+    expect(urls.slice(0, 4)).toEqual([`${ORIGIN}/`, `${ORIGIN}/robots.txt`, `${ORIGIN}/1_index_sitemap.xml`, `${ORIGIN}/1_es_0_sitemap.xml`]);
+    expect(urls).toHaveLength(5);
   });
 });

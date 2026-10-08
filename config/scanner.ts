@@ -24,6 +24,9 @@ export const THRESHOLDS = {
 
 export const SCORE_CAP = 40;
 
+/** Por debajo de esta cobertura (puntos evaluados / posibles) no se publica nota: sería poco representativa. */
+export const MIN_COVERAGE = 0.5;
+
 export const BANDS = [
   { min: 80, band: "preparada" },
   { min: 50, band: "legible con errores" },
