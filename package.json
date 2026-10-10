@@ -18,7 +18,7 @@
     "eval": "vitest run --config vitest.eval.config.ts",
     "eval:prepare": "tsx --env-file-if-exists=.env.local scripts/eval-prepare.ts",
     "eval:import": "tsx --env-file-if-exists=.env.local scripts/eval-import.ts",
-    "label": "tsx --env-file-if-exists=.env.local scripts/label-detection.ts"
+    "label": "tsx --env-file-if-exists=.env.local scripts/label.ts"
   },
   "packageManager": "pnpm@10.32.1",
   "engines": {

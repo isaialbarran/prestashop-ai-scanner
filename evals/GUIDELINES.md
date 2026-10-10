@@ -2,9 +2,9 @@
 
 Etiqueta lo que es verdad, no lo que crees que dirá el escáner. En extracción y detección, la plantilla no muestra lo que predijo el sistema, para que la etiqueta no se ancle a su respuesta.
 
-Columnas: en `de_acuerdo`, `revisada` y `respaldada` vale `sí`/`si`/`s`/`x` o `no`/`n`. Las filas con esa columna vacía no se importan, así que puedes etiquetar por partes. Las celdas vacías cuentan como `null`. El precio admite coma o punto decimal.
+Lo normal es etiquetar con el asistente (`pnpm label checks|extraction|detection|fidelity`), que hace las preguntas de esta guía caso a caso. Si prefieres hoja de cálculo: en `de_acuerdo`, `revisada` y `respaldada` vale `sí`/`si`/`s`/`x` o `no`/`n`. Las filas con esa columna vacía no se importan, así que puedes etiquetar por partes. Las celdas vacías cuentan como `null`. El precio admite coma o punto decimal.
 
-## Checks deterministas (`checks.todo.csv`)
+## Checks deterministas
 
 Por cada tienda revisas tres veredictos del escáner, con su evidencia. Si estás de acuerdo, escribe `de_acuerdo = sí`. Si no, escribe `no` y pon el estado correcto (`pass`, `fail`, `hint` o `inconclusive`) en `estado_correcto`.
 
@@ -25,9 +25,9 @@ Por cada tienda revisas tres veredictos del escáner, con su evidencia. Si está
   - `pass` si hay GTIN válido o MPN, más marca y SKU, en el bloque Product.
   - Un EAN con el dígito de control mal no cuenta.
 
-## Extracción (`extraction.todo.csv`)
+## Extracción
 
-Abre `vista_bot` (en `data/private/evals/vista-bot/`): es el mismo HTML que recibe el modelo, sin scripts ni estilos. **Etiqueta lo que aparece ahí, no lo que ves en la web con JavaScript.** Si el precio solo sale con JavaScript, el valor correcto es vacío (null).
+El asistente abre la vista como bot (en `data/private/evals/vista-bot/`): es el mismo HTML que recibe el modelo, sin scripts ni estilos. Para el nombre sugiere el título principal de la página; Enter lo acepta. **Etiqueta lo que aparece ahí, no lo que ves en la web con JavaScript.** Si el precio solo sale con JavaScript, el valor correcto es vacío (null).
 
 - `nombre`: el nombre del producto tal como aparece (normalmente el título principal).
 - `precio`: el precio final que paga el comprador, con IVA. Si hay precio tachado y rebajado, el rebajado. Sin símbolo: `4,55`.
@@ -44,7 +44,7 @@ Abre `vista_bot` (en `data/private/evals/vista-bot/`): es el mismo HTML que reci
 - `marca`: la marca o el fabricante si aparece escrito.
 - `revisada`: `sí` cuando termines la fila.
 
-## Detección de citas (`pnpm label detection`)
+## Detección de citas
 
 ¿La respuesta **cita o menciona la tienda** como sitio donde comprar o informarse?
 
@@ -57,6 +57,6 @@ Abre `vista_bot` (en `data/private/evals/vista-bot/`): es el mismo HTML que reci
 - **Marca propia:** si la tienda se llama como la marca (FITmask en fitmask.es), cuenta como mención cuando el texto presenta a la marca como vendedor o como web donde comprar. No cuenta cuando solo nombra el producto.
 - Usa `o` (omitir) si de verdad no se puede decidir, y apúntalo en la nota.
 
-## Fidelidad del informe (`fidelity.todo.csv`)
+## Fidelidad del informe
 
 Cada fila es una frase del titular o de un hallazgo, con la evidencia que cita. `respaldada = sí` solo si **todo** lo que afirma la frase está en esa evidencia: cifras, número de fichas, competidores, qué consulta. Una recomendación genérica de arreglo («añade shippingDetails al Offer») cuenta como respaldada si se deriva del fallo citado. Cualquier dato inventado o atribuido a la referencia equivocada es `no`.

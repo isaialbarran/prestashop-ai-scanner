@@ -35,12 +35,12 @@ pnpm eval:prepare extraction data/private/eval-tiendas.csv --n 50
 pnpm eval:prepare detection --from stability --n 100
 pnpm eval:prepare fidelity --from stability --n 20
 
-# 3. Etiquetado (Isai)
-#    checks.todo.csv, extraction.todo.csv y fidelity.todo.csv en una hoja de cálculo; detección en la terminal:
-pnpm label detection
-pnpm eval:import checks data/private/evals/checks.todo.csv
-pnpm eval:import extraction data/private/evals/extraction.todo.csv
-pnpm eval:import fidelity data/private/evals/fidelity.todo.csv
+# 3. Etiquetado (Isai): asistente en la terminal, un caso cada vez; q para salir y al volver sigue donde lo dejaste
+pnpm label checks       # 90 casos: ¿tiene razón el escáner? (a abre las fichas en el navegador)
+pnpm label extraction   # 50 fichas: abre la vista como bot y pregunta nombre, precio, moneda…
+pnpm label detection    # 100 respuestas: ¿cita o nombra la tienda?
+pnpm label fidelity     # 182 frases: ¿la evidencia respalda la frase?
+#    Alternativa: rellenar los *.todo.csv en una hoja de cálculo e importarlos con pnpm eval:import <tipo> <csv>
 
 # 4. Resultado
 pnpm eval
