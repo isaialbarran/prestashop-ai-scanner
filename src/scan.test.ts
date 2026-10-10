@@ -44,6 +44,18 @@ describe("scanDomain", () => {
     expect(result.score.final).toBeLessThanOrEqual(40);
   });
 
+  it("descarta como ficha una URL que redirige a una categoría", async () => {
+    const shop = fakeShop();
+    const original = shop.fetchImpl;
+    const fetchImpl: FetchImpl = async (url, init) =>
+      url.endsWith("12-zapatilla-trail-ligera-2.html")
+        ? new Response(null, { status: 301, headers: { location: "https://tienda.test/3-zapatillas" } })
+        : original(url, init);
+    const { result } = await scanDomain("tienda.test", { fetcher: fetcherFor(fetchImpl) });
+    expect(result.pages.products).not.toContain("https://tienda.test/zapatillas/12-zapatilla-trail-ligera-2.html");
+    expect(result.pages.products).toHaveLength(3);
+  });
+
   it("no pide los filtros que robots.txt ya bloquea", async () => {
     const shop = fakeShop();
     await scanDomain("tienda.test", { fetcher: fetcherFor(shop.fetchImpl) });
