@@ -133,6 +133,22 @@ describe("visibleSignals", () => {
     expect(s.price).toBeNull();
     expect(s.addToCart).toBe(false);
   });
+
+  // Temas de Elementor: el resumen del carrito vive dentro de <main>.
+  const elementor = (prices: string) =>
+    loadHtml(
+      `<html><body><main><header><nav>Envío gratis desde 49,00 €</nav></header>` +
+        `<div class="elementor-cart__container"><div class="elementor-cart__summary-value">0,00 €</div></div>` +
+        `<h1>Lienzo 30x40</h1>${prices}</main></body></html>`,
+    );
+
+  it("sin selector conocido, no toma el importe del carrito ni de la cabecera", () => {
+    expect(visibleSignals(elementor(`<div class="ce-price"><span>20,50 €</span></div>`)).price).toEqual({ text: "20,50 €", selector: "texto visible" });
+  });
+
+  it("ignora un 0,00 € suelto y no inventa precio si no hay otro", () => {
+    expect(visibleSignals(elementor(`<p>Configura tu lienzo: 0,00 €</p>`)).price).toBeNull();
+  });
 });
 
 describe("canonical y hreflang", () => {

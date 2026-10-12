@@ -1,4 +1,5 @@
 import { collapse, type Doc } from "./html";
+import { parsePrice } from "./product";
 
 /** Lo que un lector sin JavaScript encuentra en la ficha (B1, B2, A3). */
 export interface VisibleSignals {
@@ -47,6 +48,10 @@ const ADD_TO_CART_SELECTORS = [
 ];
 
 const CURRENCY_AMOUNT = /(?:\d{1,3}(?:[.\s ]\d{3})*|\d+)[.,]\d{2}\s?(?:€|EUR)|€\s?\d+(?:[.,]\d{2})?/i;
+// Para el respaldo sin selector: fuera cabecera, menús, pie y resumen del carrito, que en temas de Elementor viven dentro de <main>.
+const NOT_PRODUCT = "header, nav, footer, #header, #footer, .modal";
+const CART = /cart/i;
+const ADD_TO_CART = /add[-_]?to[-_]?cart/gi;
 const AVAILABILITY_WORDS =
   /\b(en stock|disponible|disponibilidad inmediata|últimas unidades|agotado|sin stock|fuera de stock|no disponible|bajo pedido|en existencias?|in stock|out of stock)\b/i;
 
@@ -64,7 +69,9 @@ export function visibleSignals($: Doc): VisibleSignals {
     }
   }
   if (!price) {
-    const m = collapse(visibleTextOf(main)).match(CURRENCY_AMOUNT);
+    const text = collapse(visibleTextOf(withoutChrome($, main)));
+    // Un 0,00 € suelto es el carrito vacío o un producto configurable, no un precio.
+    const m = [...text.matchAll(new RegExp(CURRENCY_AMOUNT.source, "gi"))].find((x) => parsePrice(x[0]) !== 0);
     if (m) price = { text: m[0], selector: "texto visible" };
   }
 
@@ -118,6 +125,21 @@ function mainScope($: Doc) {
     if (el.length) return el;
   }
   return $.root();
+}
+
+function withoutChrome($: Doc, el: ReturnType<Doc>): ReturnType<Doc> {
+  const clone = el.clone();
+  clone.find(NOT_PRODUCT).remove();
+  clone
+    .find("[class*=cart], [class*=Cart], [id*=cart], [id*=Cart]")
+    .filter((_, e) => {
+      const names = `${$(e).attr("class") ?? ""} ${$(e).attr("id") ?? ""}`;
+      return CART.test(names.replace(ADD_TO_CART, ""));
+    })
+    .remove();
+  // text() pega bloques contiguos: «Lienzo 30x40» + «20,50 €» se leería «4020,50 €».
+  clone.find("div, p, li, td, th, dt, dd, section, article, h1, h2, h3, h4, h5, h6, br").after(" ");
+  return clone;
 }
 
 function visibleTextOf(el: ReturnType<Doc>): string {
