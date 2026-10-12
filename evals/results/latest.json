@@ -1,41 +1,41 @@
 {
-  "date": "2026-10-08",
+  "date": "2026-10-12",
   "rows": [
     {
       "order": 1,
       "eval": "Checks deterministas",
-      "dataset": "—",
+      "dataset": "30 tiendas",
       "metric": "Discrepancias A2 · C2 · C3",
-      "value": "—",
+      "value": "1 · 7 · 1",
       "threshold": "< 3 en A2",
-      "status": "sin datos"
+      "status": "ok"
     },
     {
       "order": 2,
       "eval": "Extracción",
-      "dataset": "—",
+      "dataset": "50 fichas",
       "metric": "Acierto exacto por campo",
-      "value": "—",
+      "value": "nombre 92 % · precio 78 % · moneda 86 % · disponib. 64 % · gtin 78 % · marca 70 %",
       "threshold": "≥ 95 % en precio",
-      "status": "sin datos"
+      "status": "falla"
     },
     {
       "order": 3,
       "eval": "Detección de citas",
-      "dataset": "—",
+      "dataset": "100 respuestas",
       "metric": "Precisión · recall",
-      "value": "—",
+      "value": "1,00 · 0,94 (VP 33, FP 0, FN 2)",
       "threshold": "≥ 0,9 ambas",
-      "status": "sin datos"
+      "status": "ok"
     },
     {
       "order": 4,
       "eval": "Fidelidad del informe",
-      "dataset": "—",
-      "metric": "% frases respaldadas",
-      "value": "—",
+      "dataset": "20 informes",
+      "metric": "% frases respaldadas (juicio humano)",
+      "value": "90.1 % (164/182); borrador con referencia válida 100 %",
       "threshold": "100 %",
-      "status": "sin datos"
+      "status": "falla"
     },
     {
       "order": 5,
