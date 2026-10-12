@@ -27,21 +27,24 @@ Por cada tienda revisas tres veredictos del escáner, con su evidencia. Si está
 
 ## Extracción
 
-El asistente abre la vista como bot (en `data/private/evals/vista-bot/`): es el mismo HTML que recibe el modelo, sin scripts ni estilos. Para el nombre sugiere el título principal de la página; Enter lo acepta. **Etiqueta lo que aparece ahí, no lo que ves en la web con JavaScript.** Si el precio solo sale con JavaScript, el valor correcto es vacío (null).
+El asistente abre la vista como bot (en `data/private/evals/vista-bot/`): es el mismo HTML que recibe el modelo, sin scripts ni estilos y sin lo que el tema oculta con CSS (`display:none`, `hidden`; los temas de 1.6 meten así todos los avisos de stock y JavaScript enseña el que toca). El precio anterior sale tachado en gris con «antes». Para el nombre sugiere el título principal de la página; Enter lo acepta. **Etiqueta lo que aparece ahí, no lo que ves en la web con JavaScript.** Si el precio solo sale con JavaScript, el valor correcto es vacío (null).
 
-- `nombre`: el nombre del producto tal como aparece (normalmente el título principal).
-- `precio`: el precio final que paga el comprador, con IVA. Si hay precio tachado y rebajado, el rebajado. Sin símbolo: `4,55`.
-- `moneda`: código ISO 4217, `EUR` si se ve €.
-- `disponibilidad`: un valor de schema.org según el texto visible:
-  - «En stock», «Disponible», «Entrega en 24 h» → `InStock`.
+- `nombre`: el nombre del producto tal como aparece (normalmente el título principal, no el nombre de la web).
+- `precio`: el precio vigente, con IVA, de lo que se compra con el botón de compra. Sin símbolo: `4,55`.
+  - Si hay precio anterior tachado y rebajado, el rebajado.
+  - Si la ficha da un precio por unidad (€/ud, €/m) y otro de la caja o la bobina que se compra, el de la caja o la bobina.
+  - Ni el carrito, ni los gastos de envío, ni los productos relacionados. Un 0,00 € de un producto configurable no es precio: vacío.
+- `moneda`: código ISO 4217, `EUR` si se ve €. Sin precio, vacía (el asistente ya no la pregunta).
+- `disponibilidad`: un valor de schema.org según el texto de stock **de este producto**:
+  - «En stock», «Disponible», «Entrega en 24 h» junto al precio → `InStock`.
   - «Últimas unidades», «Quedan pocas» → `LimitedAvailability`.
   - «Agotado», «Sin stock», «No disponible» → `OutOfStock`.
   - «Bajo pedido», «Disponible en X días» → `BackOrder`.
   - «Preventa», «Próximamente» → `PreOrder`.
   - «Descatalogado» → `Discontinued`.
-  - Sin texto de disponibilidad → vacío.
-- `gtin`: solo si el EAN/GTIN aparece **escrito** en la página. Si solo está en el marcado, déjalo vacío.
-- `marca`: la marca o el fabricante si aparece escrito.
+  - Sin texto de disponibilidad → vacío. Un botón «Añadir al carrito», los plazos de envío generales de la tienda o un banner de envío gratis no dicen nada del stock.
+- `gtin`: solo si el EAN/GTIN aparece **escrito** en la página. Si solo está en el marcado, déjalo vacío. Escribe solo el número, sin el «13» de «EAN13» delante; el asistente avisa si no es un código válido.
+- `marca`: solo si la página la escribe como marca o fabricante («Marca: X», «Fabricante: X», enlace a la página del fabricante). No la deduzcas del nombre del producto ni del de la tienda.
 - `revisada`: `sí` cuando termines la fila.
 
 ## Detección de citas
@@ -55,8 +58,16 @@ El asistente abre la vista como bot (en `data/private/evals/vista-bot/`): es el 
   - solo aparecen productos de una marca que la tienda vende, sin nombrar la tienda;
   - o solo aparecen otras tiendas.
 - **Marca propia:** si la tienda se llama como la marca (FITmask en fitmask.es), cuenta como mención cuando el texto presenta a la marca como vendedor o como web donde comprar. No cuenta cuando solo nombra el producto.
+- **Productor o fabricante:** nombrar la tienda solo como quien elabora un producto («salchichón de Embutidos Ejemplo, elaborado en su obrador»), sin presentarla como sitio donde comprar, no cuenta.
 - Usa `o` (omitir) si de verdad no se puede decidir, y apúntalo en la nota.
 
 ## Fidelidad del informe
 
 Cada fila es una frase del titular o de un hallazgo, con la evidencia que cita. `respaldada = sí` solo si **todo** lo que afirma la frase está en esa evidencia: cifras, número de fichas, competidores, qué consulta. Una recomendación genérica de arreglo («añade shippingDetails al Offer») cuenta como respaldada si se deriva del fallo citado. Cualquier dato inventado o atribuido a la referencia equivocada es `no`.
+
+- En la evidencia, ✓ es que el dato está o coincide y ✗ que falta o no coincide.
+- La evidencia termina con la línea «Prioridad técnica»: el orden de los checks por puntos perdidos. Una frase que llama «prioritario» o «principal» a un problema solo está respaldada si es el primero de esa lista.
+
+## Revisión de etiquetas dudosas
+
+Tras un análisis de errores, los casos donde la etiqueta puede estar mal o la convención no estaba escrita van a `data/private/evals/revisar.json`, con el motivo. `pnpm label <tipo> --revisar` los enseña uno a uno con tu etiqueta anterior: **m** la mantiene tal cual, **c** vuelve a preguntar el caso entero. Nadie más cambia una etiqueta.

@@ -18,7 +18,15 @@ import { listReports, loadSnapshot, type StoredReport } from "../src/evals/sourc
 import { detectChallenge } from "../src/fetch/challenge";
 import { cleanHtmlForBot } from "../src/llm/extract";
 import { storeNames } from "../src/llm/queries";
-import { splitSentences } from "../src/llm/report";
+import { pointsLost, splitSentences } from "../src/llm/report";
+
+// La vista como bot no lleva los estilos de la tienda; sin esto el precio anterior no sale tachado
+// y parece el precio de venta (8 de los 12 fallos de precio de la v1).
+const OLD_PRICE_CSS =
+  "del,s,strike,#old_price,#old_price_display,.old-price,.old_price,.price-old,.regular-price,.ce-product-price-regular,.product-price-regular" +
+  "{text-decoration:line-through;color:#888}" +
+  "#old_price_display::before,.regular-price::before,.old-price::before,.ce-product-price-regular::before" +
+  '{content:"antes ";font:11px sans-serif;text-decoration:none;display:inline-block;margin-right:4px}';
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -103,8 +111,8 @@ async function prepareExtraction(domains: string[], n: number) {
     const { html } = cleanHtmlForBot(p.res!.body!);
     await writeFile(
       path.join(viewDir, view),
-      `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Vista como bot · ${p.domain}</title></head><body>` +
-        `<p style="background:#fff3cd;padding:8px;font:14px sans-serif">Vista como bot de <a href="${p.url}">${p.url}</a>: el mismo HTML que recibe el modelo, sin scripts ni estilos. Etiqueta lo que se ve aquí.</p>${html}</body></html>`,
+      `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Vista como bot · ${p.domain}</title><style>${OLD_PRICE_CSS}</style></head><body>` +
+        `<p style="background:#fff3cd;padding:8px;font:14px sans-serif">Vista como bot de <a href="${p.url}">${p.url}</a>: el mismo HTML que recibe el modelo, sin scripts, sin estilos y sin lo que el tema oculta. Etiqueta lo que se ve aquí. Lo tachado en gris es el precio anterior.</p>${html}</body></html>`,
     );
     rows.push({
       id: `${p.domain}:${p.index}`,
@@ -190,7 +198,7 @@ async function prepareFidelity(n: number, from?: string) {
           parte: part,
           frase: sentence,
           referencias: refs.join(" "),
-          evidencia: refs.map((ref) => evidenceFor(r, ref)).join(" || "),
+          evidencia: [...refs.map((ref) => evidenceFor(r, ref)), priorityLine(r)].join(" || "),
           respaldada: "",
           nota: "",
         };
@@ -202,6 +210,12 @@ async function prepareFidelity(n: number, from?: string) {
   if (kept) console.log(`  ${kept} filas conservan lo ya etiquetado`);
   await writeFile(file, toCsv(rows, ["id", "informe", "dominio", "parte", "frase", "referencias", "evidencia", "respaldada", "nota"]));
   report(file, rows.length, [], `${picked.length} informes`);
+}
+
+/** Para juzgar frases que hablan de prioridad: el orden por puntos perdidos que el informe recibe desde la v2. */
+function priorityLine(r: StoredReport["report"]): string {
+  const ranking = pointsLost(r.scan.checks).map((c) => `${c.id} −${String(c.lost).replace(".", ",")}`);
+  return `Prioridad técnica (puntos perdidos): ${ranking.join(" · ") || "ninguno pierde puntos"}`;
 }
 
 function evidenceFor(r: StoredReport["report"], ref: string): string {

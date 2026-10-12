@@ -3,7 +3,8 @@
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { load } from "cheerio";
-import { datasetPath, DATASETS_DIR, DetectionLabelSchema, ExtractionLabelSchema, FidelityLabelSchema, readJsonl } from "../src/evals/datasets";
+import { runAllChecks } from "../src/checks/index";
+import { ChecksLabelSchema, datasetPath, DATASETS_DIR, DetectionLabelSchema, ExtractionLabelSchema, FidelityLabelSchema, readJsonl } from "../src/evals/datasets";
 import { fieldMatches, FIELDS } from "../src/evals/metrics";
 import { listReports, loadSnapshot } from "../src/evals/sources";
 import { cleanHtmlForBot, extractProduct } from "../src/llm/extract";
@@ -15,6 +16,22 @@ import { evalLlm } from "../evals/lib";
 
 const out: string[] = [`# Análisis de errores · ${new Date().toISOString().slice(0, 10)}`, ""];
 const { llm } = evalLlm();
+
+// ── Checks ──────────────────────────────────────────────────────────────────
+const checkLabels = readJsonl(datasetPath("checks"), ChecksLabelSchema) ?? [];
+out.push(`## Checks deterministas (${checkLabels.length} veredictos): discrepancias`, "");
+for (const l of checkLabels) {
+  const snapshot = loadSnapshot(l.domain);
+  const check = snapshot ? runAllChecks(snapshot).find((c) => c.id === l.check) : null;
+  if (!check || check.status === l.correctStatus) continue;
+  out.push(
+    `### ${l.id} · escáner ${check.status}, correcto ${l.correctStatus}`,
+    "",
+    ...check.evidence.map((e) => `- ${e.agent ? `${e.agent} ` : ""}${e.httpStatus ? `(${e.httpStatus}) ` : ""}${e.note} · ${e.url}`),
+    l.note ? `- Nota de Isai: ${l.note}` : "",
+    "",
+  );
+}
 
 // ── Extracción ──────────────────────────────────────────────────────────────
 const AMOUNT = /(?:\d{1,3}(?:[.\s ]\d{3})*|\d+)[.,]\d{2}\s?(?:€|EUR)|€\s?\d+(?:[.,]\d{2})?/gi;

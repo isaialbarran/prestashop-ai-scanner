@@ -1,7 +1,8 @@
 // Asistente de etiquetado en la terminal: un caso cada vez, una pregunta corta, guarda al momento.
 // Uso: pnpm label checks | extraction | detection | fidelity   (q para salir; al volver sigue donde lo dejaste)
+//      pnpm label <tipo> --revisar   repasa los casos de data/private/evals/revisar.json con tu etiqueta anterior y el motivo
 import { execFile } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import type { z } from "zod";
@@ -10,12 +11,26 @@ import { loadEnv } from "../src/env";
 import { parseCsv } from "../src/evals/csv";
 import { DATASETS_DIR, datasetPath, LABEL_SCHEMAS, readJsonl, writeJsonl, type Kind } from "../src/evals/datasets";
 import { mergeById } from "../src/evals/import";
-import { availabilityFromKey, AVAILABILITY_MENU, CHECK_GUIDE, evidenceLines, headingOf, progress, STATUS_KEYS, textAnswer } from "../src/evals/label";
+import {
+  availabilityFromKey,
+  AVAILABILITY_MENU,
+  CHECK_GUIDE,
+  evidenceLines,
+  gtinFromInput,
+  headingOf,
+  labelSummary,
+  progress,
+  ReviewListSchema,
+  STATUS_KEYS,
+  textAnswer,
+  type ReviewList,
+} from "../src/evals/label";
 import { parsePrice } from "../src/parse/product";
 
 const kind = process.argv[2] as Kind;
+const reviewMode = process.argv.includes("--revisar");
 if (!["checks", "extraction", "detection", "fidelity"].includes(kind)) {
-  console.error("Uso: pnpm label checks | extraction | detection | fidelity");
+  console.error("Uso: pnpm label checks | extraction | detection | fidelity [--revisar]");
   process.exit(2);
 }
 
@@ -72,22 +87,63 @@ function loadItems(): Row[] {
   return kind === "detection" ? text.split("\n").filter(Boolean).map((l) => JSON.parse(l) as Row) : parseCsv(text);
 }
 
-const pending = items.filter((i) => !done().has(i.id));
-console.log(`${done().size} de ${items.length} ya etiquetados · ${pending.length} pendientes. Criterios completos: evals/GUIDELINES.md`);
-await ask(dim("Enter para empezar… "));
+const labelItem = (item: Row) =>
+  kind === "checks" ? labelCheck(item) : kind === "extraction" ? labelExtraction(item) : kind === "detection" ? labelDetection(item) : labelFidelity(item);
 
 let labeled = 0;
-for (const item of pending) {
-  console.clear();
-  console.log(`${dim(progress(done().size, items.length))}\n`);
-  const result =
-    kind === "checks" ? await labelCheck(item) : kind === "extraction" ? await labelExtraction(item) : kind === "detection" ? await labelDetection(item) : await labelFidelity(item);
-  if (result === "quit") break;
-  if (result === "saved") labeled++;
+if (reviewMode) await review();
+else {
+  const pending = items.filter((i) => !done().has(i.id));
+  console.log(`${done().size} de ${items.length} ya etiquetados · ${pending.length} pendientes. Criterios completos: evals/GUIDELINES.md`);
+  await ask(dim("Enter para empezar… "));
+  for (const item of pending) {
+    console.clear();
+    console.log(`${dim(progress(done().size, items.length))}\n`);
+    const result = await labelItem(item);
+    if (result === "quit") break;
+    if (result === "saved") labeled++;
+  }
 }
 rl.close();
-console.log(`\n${green("✓")} ${labeled} etiquetas nuevas · ${done().size}/${items.length} en ${target}`);
+console.log(`\n${green("✓")} ${labeled} etiquetas ${reviewMode ? "cambiadas" : "nuevas"} · ${done().size}/${items.length} en ${target}`);
 await backup();
+
+// ── revisión ────────────────────────────────────────────────────────────────
+
+/** Repasa los casos dudosos: enseña tu etiqueta y el motivo; mantener no cambia nada, cambiar la vuelve a pedir entera. */
+async function review() {
+  const file = path.join(DATASETS_DIR, "revisar.json");
+  if (!existsSync(file)) {
+    console.error(`Falta ${file}: no hay casos marcados para revisar`);
+    process.exit(1);
+  }
+  const list: ReviewList = ReviewListSchema.parse(JSON.parse(readFileSync(file, "utf8")));
+  const queue = (list[kind] ?? []).filter((r) => !r.reviewed);
+  const byId = new Map(items.map((i) => [i.id, i]));
+  console.log(`${(list[kind] ?? []).length - queue.length} de ${(list[kind] ?? []).length} ya revisados · ${queue.length} pendientes. Criterios: evals/GUIDELINES.md`);
+  await ask(dim("Enter para empezar… "));
+  for (const [i, entry] of queue.entries()) {
+    const item = byId.get(entry.id);
+    const previous = labels.find((l) => l.id === entry.id) as Record<string, unknown> | undefined;
+    if (!item || !previous) continue;
+    console.clear();
+    console.log(`${dim(`Revisión ${i + 1}/${queue.length}`)} · ${bold(entry.id)}\n`);
+    console.log(`Tu etiqueta:  ${bold(labelSummary(kind, previous))}`);
+    console.log(`Por qué se revisa: ${entry.reason}\n`);
+    const a = await askKey("[m]antenerla  [c]ambiarla (vuelve a preguntar el caso entero)  [o]mitir  [q] salir: ", ["m", "c", "o", "q"]);
+    if (a === "q") break;
+    if (a === "o") continue;
+    if (a === "c") {
+      console.clear();
+      const result = await labelItem(item);
+      if (result === "quit") break;
+      if (result !== "saved") continue;
+      labeled++;
+    }
+    entry.reviewed = true;
+    writeFileSync(file, `${JSON.stringify(list, null, 2)}\n`);
+  }
+}
 
 // ── checks ──────────────────────────────────────────────────────────────────
 
@@ -124,7 +180,7 @@ async function labelCheck(row: Row): Promise<"saved" | "skip" | "quit"> {
 
 async function labelExtraction(row: Row): Promise<"saved" | "skip" | "quit"> {
   const view = path.resolve(DATASETS_DIR, row.vista_bot);
-  const heading = existsSync(view) ? headingOf(readFileSync(view, "utf8")) : null;
+  const heading = existsSync(view) ? headingOf(readFileSync(view, "utf8"), row.dominio) : null;
   open(view);
   console.log(`${bold(row.dominio)} · ficha ${row.indice}\n${dim(row.url)}\n`);
   console.log("Se ha abierto en el navegador la ficha «como bot» (sin JavaScript). Apunta lo que se ve ahí, no en la web normal.");
@@ -144,13 +200,26 @@ async function labelExtraction(row: Row): Promise<"saved" | "skip" | "quit"> {
       if (price !== null) break;
       console.log("  No entiendo ese precio; escribe solo el número, p. ej. 12,90");
     }
-    const currency = textAnswer((await ask("Moneda [Enter = EUR]: ")).toUpperCase(), "EUR");
+    // Sin precio no hay moneda que etiquetar.
+    const currency = price === null ? null : textAnswer((await ask("Moneda [Enter = EUR]: ")).toUpperCase(), "EUR");
     console.log("Disponibilidad según el texto de la página:");
     for (const m of AVAILABILITY_MENU) console.log(`  ${m.key}. ${m.value.padEnd(20)} ${dim(m.text)}`);
     let availability: ReturnType<typeof availabilityFromKey>;
     do availability = availabilityFromKey(await ask("Número [Enter = no hay texto de disponibilidad]: "));
     while (availability === undefined);
-    const gtin = textAnswer(await ask("EAN/GTIN escrito en la página [Enter = no aparece]: "), null);
+    let gtin: string | null = null;
+    for (;;) {
+      const g = await ask("EAN/GTIN escrito en la página, solo el número [Enter = no aparece]: ");
+      if (g === "" || g === "-") break;
+      const parsed = gtinFromInput(g);
+      if (!parsed) {
+        console.log("  Escribe solo el código: un número de 8, 12, 13 o 14 cifras, sin el «13» de EAN13 delante.");
+        continue;
+      }
+      if (!parsed.valid && (await askKey(`  ${parsed.gtin} no cuadra con su dígito de control. ¿Es lo que pone la página?  [s]í  [n]o: `, ["s", "n"])) === "n") continue;
+      gtin = parsed.gtin;
+      break;
+    }
     const brand = textAnswer(await ask("Marca o fabricante escrito en la página [Enter = no aparece]: "), null);
 
     console.log(`\n  nombre ${name ?? "—"} · precio ${price ?? "—"} · moneda ${currency ?? "—"} · disponibilidad ${availability ?? "—"} · gtin ${gtin ?? "—"} · marca ${brand ?? "—"}`);

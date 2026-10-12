@@ -27,7 +27,10 @@ const norm = (s: string) =>
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 
-/** Acierto exacto por campo, con normalización mínima (mayúsculas, acentos, espacios; precio a ±0,005). */
+/** Grupos de 8 a 14 dígitos sin ceros a la izquierda: «EAN13 0715891502624» y el UPC «715891502624» son el mismo código. */
+const gtinGroups = (v: unknown) => (String(v).match(/\d{8,14}/g) ?? [String(v).replace(/\D/g, "")]).map((g) => g.replace(/^0+/, ""));
+
+/** Acierto exacto por campo, con normalización mínima (mayúsculas, acentos, espacios; precio a ±0,005; GTIN por grupos de dígitos). */
 export function fieldMatches(field: Field, truth: ExtractedProduct, pred: ExtractedProduct | null): boolean {
   const t = truth[field];
   const p = pred ? pred[field] : null;
@@ -38,8 +41,10 @@ export function fieldMatches(field: Field, truth: ExtractedProduct, pred: Extrac
     case "currency":
     case "availability":
       return String(t).toUpperCase() === String(p).toUpperCase();
-    case "gtin":
-      return String(t).replace(/\D/g, "") === String(p).replace(/\D/g, "");
+    case "gtin": {
+      const predicted = new Set(gtinGroups(p));
+      return gtinGroups(t).some((g) => predicted.has(g));
+    }
     default:
       return norm(String(t)) === norm(String(p));
   }

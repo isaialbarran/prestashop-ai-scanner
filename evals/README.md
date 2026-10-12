@@ -1,6 +1,6 @@
 # Evals
 
-`pnpm eval` imprime la tabla de los 6 evals y falla si alguna métrica no llega a su umbral. También deja el resultado agregado en `evals/results/latest.md` y `latest.json`. Ese es el único resultado que se sube al repo.
+`pnpm eval` imprime la tabla de los 6 evals y falla si alguna métrica no llega a su umbral. También deja el resultado agregado en `evals/results/latest.md` y `latest.json`. Es lo único de los evals que se sube al repo, junto con las líneas base de cada versión (`v1.md`: antes del análisis de errores).
 
 | Eval | Dataset | Métrica | Umbral |
 |---|---|---|---|
@@ -44,6 +44,13 @@ pnpm label fidelity     # 182 frases: ¿la evidencia respalda la frase?
 
 # 4. Resultado
 pnpm eval
+pnpm eval:errors        # cada fallo con su contexto, en data/private/evals/errores.md
+
+# 5. Tras cambiar el prompt de extracción: rehace la extracción de los snapshots sin red (C2 la usa)
+pnpm eval:refresh data/private/eval-tiendas.csv
+
+# 6. Revisión de etiquetas dudosas (Isai): los casos de data/private/evals/revisar.json, con tu etiqueta y el motivo
+pnpm label extraction --revisar
 ```
 
 La extracción y la detección se repiten con el código actual, llamando al LLM con caché. Repetir un eval sin cambios en el prompt o el modelo no cuesta nada; tras un cambio, la extracción cuesta unos 0,13 $.

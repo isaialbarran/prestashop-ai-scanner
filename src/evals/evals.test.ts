@@ -46,6 +46,12 @@ describe("métricas", () => {
     expect(fieldMatches("price", truth(), truth({ price: 2.804 }))).toBe(true);
     expect(fieldMatches("price", truth(), truth({ price: 2.81 }))).toBe(false);
     expect(fieldMatches("gtin", truth({ gtin: null }), truth({ gtin: null }))).toBe(true);
+    // La etiqueta copia «EAN13: 4006381333931»: cuenta el grupo de 8 a 14 dígitos, no el «13» del nombre.
+    expect(fieldMatches("gtin", truth({ gtin: "EAN13 4006381333931" }), truth({ gtin: "4006381333931" }))).toBe(true);
+    expect(fieldMatches("gtin", truth({ gtin: "4006381333931" }), truth({ gtin: "4006381333932" }))).toBe(false);
+    expect(fieldMatches("gtin", truth({ gtin: "0715891502624" }), truth({ gtin: "715891502624" }))).toBe(true);
+    // Dígitos pegados sin separación: no se adivina dónde empieza el código.
+    expect(fieldMatches("gtin", truth({ gtin: "134006381333931" }), truth({ gtin: "4006381333931" }))).toBe(false);
     expect(fieldMatches("availability", truth(), null)).toBe(false);
   });
 
