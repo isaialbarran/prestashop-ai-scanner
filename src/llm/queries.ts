@@ -55,31 +55,39 @@ export function storeNames(snapshot: ScanSnapshot): string[] {
   return [...names].filter((n) => compact(n).length >= 3 && !GENERIC.has(compact(n)));
 }
 
-/** Quita de la consulta las palabras que forman el nombre o el dominio de la tienda. */
-export function sanitizeQuery(text: string, names: string[]): { text: string; changed: boolean } {
+/** Posiciones de las palabras que forman el nombre o el dominio de la tienda. */
+function nameWords(words: string[], names: string[]): Set<number> {
   const targets = names.map(compact).filter((n) => n.length >= 3);
-  const words = text.split(/\s+/);
-  const keep = words.map(() => true);
+  const hit = new Set<number>();
   for (let i = 0; i < words.length; i++) {
     for (let len = 1; len <= 3 && i + len <= words.length; len++) {
       const chunk = compact(words.slice(i, i + len).join(" "));
       // Una palabra suelta cuenta si empieza por el nombre ("FITmask's", "lylotools.es"), no si solo lo contiene ("decoración" ⊃ "ecor").
       if (chunk && targets.some((t) => chunk === t || (len === 1 && chunk.startsWith(t)))) {
-        for (let k = i; k < i + len; k++) keep[k] = false;
+        for (let k = i; k < i + len; k++) hit.add(k);
       }
     }
   }
+  return hit;
+}
+
+/** Quita de la consulta las palabras que forman el nombre o el dominio de la tienda. */
+export function sanitizeQuery(text: string, names: string[]): { text: string; changed: boolean } {
+  const words = text.split(/\s+/);
+  const hit = nameWords(words, names);
+  if (!hit.size) return { text, changed: false };
   const out = words
-    .filter((_, i) => keep[i])
+    .filter((_, i) => !hit.has(i))
     .join(" ")
     .replace(/\s+([,.?])/g, "$1")
     .replace(/\b(de|en|la|el)\s*$/i, "")
     .trim();
-  return { text: out, changed: out !== text.trim() };
+  return { text: out, changed: true };
 }
 
+/** El texto nombra la tienda como palabra completa: «Panorama» no nombra a Rama. */
 export function mentionsStore(text: string, names: string[]): boolean {
-  return sanitizeQuery(text, names).changed;
+  return nameWords(text.split(/\s+/), names).size > 0;
 }
 
 /** Contexto de la categoría y las 3 fichas para generar consultas. */
