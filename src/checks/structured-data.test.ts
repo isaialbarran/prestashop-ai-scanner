@@ -72,6 +72,21 @@ describe("C2 Offer igual a lo visible", () => {
     expect(c.status).toBe("hint");
     expect(c.points).toBeCloseTo(10.67, 2);
     expect(c.evidence.some((e) => /89\.9.*99\.9|99\.9.*89\.9/.test(e.note))).toBe(true);
+    expect(c.fix).toMatch(/precio/);
+    expect(c.fix).not.toMatch(/disponibilidad|moneda/);
+  });
+
+  it("cuenta como discrepancia un dato del marcado que la ficha no muestra", () => {
+    // Convención de las etiquetas: el InStock del marcado sin texto de stock en la ficha no está respaldado.
+    const c = runCheck("C2", snapshot({ extracted: [visible({ availability: null }), visible(), visible()] }));
+    expect(c.status).toBe("hint");
+    expect(c.evidence[0]?.note).toMatch(/disponibilidad: marcado InStock, visible — ✗/);
+  });
+
+  it("el arreglo nombra solo los campos que no coinciden", () => {
+    const c = runCheck("C2", snapshot({ extracted: [visible({ availability: "OutOfStock" }), visible(), visible()] }));
+    expect(c.fix).toMatch(/disponibilidad/);
+    expect(c.fix).not.toMatch(/precio|IVA|moneda/);
   });
 });
 
@@ -80,8 +95,11 @@ describe("C3 identificadores", () => {
     expect(runCheck("C3", snapshot())).toMatchObject({ status: "pass", points: 8 });
   });
 
-  it("da la mitad sin gtin ni mpn", () => {
-    expect(runCheck("C3", all(fixture("html/product-conflict.html")))).toMatchObject({ status: "hint", points: 4 });
+  it("da la mitad sin gtin ni mpn, y solo pide lo que falta", () => {
+    const c = runCheck("C3", all(fixture("html/product-conflict.html")));
+    expect(c).toMatchObject({ status: "hint", points: 4 });
+    expect(c.fix).toMatch(/EAN-13 o MPN/);
+    expect(c.fix).not.toMatch(/marca|referencia|brand|sku/);
   });
 
   it("no cuenta un gtin con dígito de control incorrecto", () => {
@@ -89,6 +107,7 @@ describe("C3 identificadores", () => {
     const c = runCheck("C3", all(html));
     expect(c.points).toBe(4);
     expect(c.evidence[0]?.note).toMatch(/dígito de control/);
+    expect(c.fix).toMatch(/dígito de control/);
   });
 });
 
@@ -98,7 +117,17 @@ describe("C4 envío, devoluciones y valoraciones", () => {
   });
 
   it("falla sin ninguno", () => {
-    expect(runCheck("C4", all(fixture("html/product-conflict.html")))).toMatchObject({ status: "fail", points: 0 });
+    const c = runCheck("C4", all(fixture("html/product-conflict.html")));
+    expect(c).toMatchObject({ status: "fail", points: 0 });
+    expect(c.fix).toMatch(/shippingDetails.*hasMerchantReturnPolicy.*aggregateRating/);
+  });
+
+  it("el arreglo pide solo lo que falta", () => {
+    const html = classicAt(PRODUCT_URLS[0]!).replace(/"aggregateRating": \{[^}]*\},/, "");
+    const c = runCheck("C4", all(html));
+    expect(c.status).toBe("hint");
+    expect(c.fix).toMatch(/aggregateRating/);
+    expect(c.fix).not.toMatch(/shippingDetails|hasMerchantReturnPolicy/);
   });
 });
 
@@ -107,7 +136,10 @@ describe("C5 migas y organización", () => {
     expect(runCheck("C5", snapshot())).toMatchObject({ status: "pass", points: 3 });
   });
 
-  it("cuenta la Organization de la portada", () => {
-    expect(runCheck("C5", all(fixture("html/product-16.html")))).toMatchObject({ status: "hint", points: 1 });
+  it("cuenta la Organization de la portada, y solo pide las migas", () => {
+    const c = runCheck("C5", all(fixture("html/product-16.html")));
+    expect(c).toMatchObject({ status: "hint", points: 1 });
+    expect(c.fix).toMatch(/BreadcrumbList/);
+    expect(c.fix).not.toMatch(/Organization/);
   });
 });

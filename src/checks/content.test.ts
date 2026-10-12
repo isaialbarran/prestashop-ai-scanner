@@ -24,6 +24,13 @@ describe("B1 nombre, precio y disponibilidad", () => {
     expect(c.points).toBeCloseTo(6.67, 2);
     expect(c.evidence).toHaveLength(3);
   });
+
+  it("el arreglo nombra solo lo que falta y se lee como orden", () => {
+    const c = runCheck("B1", snapshot({ products: PRODUCT_URLS.map((url) => product(url, fixture("html/product-catalog-mode.html"))) }));
+    expect(c.fix).toMatch(/^Haz que/);
+    expect(c.fix).toMatch(/precio/);
+    expect(c.fix).not.toMatch(/nombre/);
+  });
 });
 
 describe("B2 descripción", () => {
@@ -37,10 +44,15 @@ describe("B2 descripción", () => {
     expect(c.status).toBe("hint");
     expect(c.points).toBeGreaterThan(0);
     expect(c.points).toBeLessThan(2);
+    // Solo lo que se deriva de la evidencia: descripción corta, sin suponer pestañas por AJAX ni atributos concretos.
+    expect(c.fix).toMatch(/300 caracteres/);
+    expect(c.fix).not.toMatch(/AJAX|material/);
   });
 
   it("falla si no hay descripción en el HTML", () => {
     const products = PRODUCT_URLS.map((url) => product(url, fixture("html/product-js-only.html")));
-    expect(runCheck("B2", snapshot({ products }))).toMatchObject({ status: "fail", points: 0 });
+    const c = runCheck("B2", snapshot({ products }));
+    expect(c).toMatchObject({ status: "fail", points: 0 });
+    expect(c.fix).toMatch(/HTML inicial/);
   });
 });
