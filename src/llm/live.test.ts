@@ -4,7 +4,7 @@ import { z } from "zod";
 import { fixture } from "../../test/fixtures";
 import { createMemoryLlmCache } from "./cache-memory";
 import { CostLedger } from "./cost";
-import { createLiveLlm } from "./live";
+import { createLiveLlm, createLlmPool } from "./live";
 
 const searchResponse = () => JSON.parse(fixture("llm/openai-search.json"));
 const structuredResponse = (json: unknown) => ({
@@ -37,6 +37,35 @@ describe("createLiveLlm", () => {
     expect(second.call.fromCache).toBe(true);
     expect(second.answer.cited).toEqual(first.answer.cited);
     expect(ledger.spentEur()).toBeCloseTo(ledger.reportCostUsd() / 2 / 1.1177, 6);
+  });
+
+  it("con freshPurposes no lee la caché para esos propósitos, pero guarda la respuesta nueva", async () => {
+    const { client, create } = stubOpenAI(() => searchResponse());
+    const cache = createMemoryLlmCache();
+    await createLiveLlm({ ledger: new CostLedger(2), cache, openai: client }).search({ provider: "openai", model: "chat-latest", query: "q" });
+    const fresh = createLiveLlm({ ledger: new CostLedger(2), cache, openai: client, freshPurposes: ["visibility"] });
+    const { call } = await fresh.search({ provider: "openai", model: "chat-latest", query: "q" });
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(call.fromCache).toBe(false);
+    expect(cache.size()).toBe(1);
+  });
+
+  it("un pool comparte la cola de Perplexity entre informes y cada ledger recibe sus llamadas", async () => {
+    const body = fixture("llm/perplexity-agent.json");
+    const starts: number[] = [];
+    const fetchImpl = vi.fn(async () => {
+      starts.push(Date.now());
+      return new Response(body, { status: 200 });
+    });
+    const pool = createLlmPool({ fetchImpl, perplexityMinIntervalMs: 50, retryBaseMs: 1 });
+    const [a, b] = [new CostLedger(2), new CostLedger(2)];
+    await Promise.all([
+      pool.forLedger(a).search({ provider: "perplexity", model: "perplexity/sonar", query: "uno" }),
+      pool.forLedger(b).search({ provider: "perplexity", model: "perplexity/sonar", query: "dos" }),
+    ]);
+    expect(a.calls).toHaveLength(1);
+    expect(b.calls).toHaveLength(1);
+    expect(starts[1]! - starts[0]!).toBeGreaterThanOrEqual(45);
   });
 
   it("valida la salida estructurada con zod y usa esfuerzo bajo en el modelo barato", async () => {

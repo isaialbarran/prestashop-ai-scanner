@@ -4,7 +4,7 @@ import type { ScanSnapshot } from "../checks/types";
 import type { AnswerOutcome, VisibilityResult } from "../schema";
 import { BudgetExceededError } from "./cost";
 import { domainOf } from "./openai";
-import { storeNames, type BuyerQuery } from "./queries";
+import { mentionsStore, storeNames, type BuyerQuery } from "./queries";
 import type { Citation, Llm, LlmCall } from "./types";
 
 export interface StoreIdentity {
@@ -34,7 +34,8 @@ const norm = (s: string) =>
 
 /**
  * Paso 2: un LLM barato decide si el texto nombra la tienda. Solo se acepta si devuelve un fragmento
- * que aparece literalmente en la respuesta; así no puede inventarse una mención.
+ * que aparece literalmente en la respuesta y que contiene el nombre o el dominio como palabra completa;
+ * así no puede inventarse una mención ni confundir «Panorama» con Rama.
  */
 export async function detectMention(
   text: string,
@@ -50,14 +51,14 @@ export async function detectMention(
     system: "Decides si la respuesta de un asistente de IA menciona una tienda online concreta.",
     user: [
       `Tienda: ${store.names.join(", ")} (dominio ${store.domains.join(", ")}).`,
-      "¿La respuesta menciona esta tienda por su nombre o su dominio como sitio donde comprar o informarse? Mencionar solo productos de una marca no cuenta, salvo que la marca sea la propia tienda.",
-      "Si la menciona, copia literalmente en `quote` el fragmento donde aparece. Si no, mentioned=false y quote=null.",
+      "¿La respuesta menciona esta tienda por su nombre o su dominio como sitio donde comprar o informarse? Mencionar solo productos de una marca no cuenta, salvo que la marca sea la propia tienda y la respuesta la presente como vendedor o web donde comprar. Nombrarla solo como fabricante o productor de un artículo no cuenta.",
+      "Si la menciona, copia literalmente en `quote` el fragmento donde aparece su nombre o dominio. Si no, mentioned=false y quote=null.",
       "",
       "Respuesta del asistente:",
       text,
     ].join("\n"),
   });
-  const quoted = data.mentioned && !!data.quote && norm(text).includes(norm(data.quote));
+  const quoted = data.mentioned && !!data.quote && norm(text).includes(norm(data.quote)) && mentionsStore(data.quote, [...store.names, ...store.domains]);
   return { mentioned: quoted, quote: quoted ? data.quote : null, call };
 }
 
@@ -105,6 +106,8 @@ export async function runVisibility(
           citedDomains: [...new Set(answer.cited.map((c) => c.domain))],
           citationMode: answer.citationMode,
           error: null,
+          text: answer.text,
+          citations: answer.cited.map((c) => ({ url: c.url, domain: c.domain })),
         };
       } catch (err) {
         if (err instanceof BudgetExceededError) throw err;

@@ -94,6 +94,21 @@ describe("createFetcher", () => {
     expect(fetchImpl.calls).toHaveLength(2);
   });
 
+  it("tras 3 errores de red seguidos deja de enviar peticiones al host", async () => {
+    const fetchImpl = routes({});
+    const f = createFetcher({ fetchImpl, limiter: noWait() });
+    for (let i = 0; i < 5; i++) await f.get(`https://caido.test/${i}`, "browser");
+    expect(fetchImpl.calls).toHaveLength(3);
+    expect((await f.get("https://caido.test/x", "browser")).error).toMatch(/se dejan de enviar/);
+  });
+
+  it("un éxito reinicia la cuenta de errores", async () => {
+    const fetchImpl = routes({ "https://t.test/ok": () => new Response("ok") });
+    const f = createFetcher({ fetchImpl, limiter: noWait() });
+    for (const path of ["a", "b", "ok", "c", "d", "e"]) await f.get(`https://t.test/${path}`, "browser");
+    expect(fetchImpl.calls).toHaveLength(6);
+  });
+
   it("no guarda en caché los errores de red", async () => {
     const cache = createMemoryCache();
     const set = vi.spyOn(cache, "set");

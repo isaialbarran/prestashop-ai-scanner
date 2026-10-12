@@ -101,6 +101,31 @@ describe("A2 misma respuesta para rastreadores", () => {
     expect(c).toMatchObject({ status: "pass", points: 15 });
   });
 
+  it("acepta la misma ficha con plantilla móvil para Googlebot aunque tenga menos texto", () => {
+    const mobile = () =>
+      `<html><head><meta name="viewport" content="width=device-width"></head><body id="product"><h1>Zapatilla trail Ligera 2</h1><span class="current-price">89,90 €</span></body></html>`;
+    const products = PRODUCT_URLS.map((url) =>
+      product(url, classicAt(url), { googlebot: [fr(url, 200, mobile(), { agent: "googlebot" })] }),
+    );
+    const c = runCheck("A2", snapshot({ products }));
+    expect(c.perAgent?.googlebot).toBe("pass");
+    expect(c.evidence.find((e) => e.agent === "googlebot")?.note).toMatch(/misma ficha con otra plantilla/);
+  });
+
+  it("no culpa al user-agent si el navegador también deja de responder después (límite por IP)", () => {
+    const down = (url: string) => fr(url, null, null, { error: "fetch failed (UND_ERR_CONNECT_TIMEOUT)" });
+    const products = PRODUCT_URLS.map((url) =>
+      product(url, classicAt(url), { googlebot: [1, 2].map((attempt) => ({ ...down(url), agent: "googlebot" as const, attempt })) }),
+    );
+    const cut = snapshot({ products, category: down(`${ORIGIN}/3-zapatillas`), ucp: down(`${ORIGIN}/.well-known/ucp`), llms: down(`${ORIGIN}/llms.txt`) });
+    const c = runCheck("A2", cut);
+    expect(c.perAgent?.googlebot).toBe("inconclusive");
+    expect(c.blockKind?.googlebot).toBeUndefined();
+
+    const stillUp = snapshot({ products });
+    expect(runCheck("A2", stillUp).blockKind?.googlebot).toBe("origen");
+  });
+
   it("es inconcluso si el navegador tampoco entra", () => {
     const products = PRODUCT_URLS.map((url) => product(url, challenge, {}));
     for (const p of products) {

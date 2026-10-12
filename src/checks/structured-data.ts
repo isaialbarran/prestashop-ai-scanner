@@ -1,7 +1,7 @@
 import type { ProductMarkup } from "../parse/product";
 import { isOrganizationType, type StructuredData } from "../parse/structured";
 import type { Check } from "../schema";
-import { perProduct } from "./content";
+import { listEs, perProduct } from "./content";
 import type { ScanContext } from "./context";
 import { evidenceFrom, inconclusive, pickPrimaryProduct } from "./helpers";
 
@@ -86,6 +86,8 @@ export function sameAvailability(markup: string | null, visible: string | null):
   return a && b ? a === b : markup === visible;
 }
 
+const ARTICLE: Record<string, string> = { precio: "el", moneda: "la", disponibilidad: "la" };
+
 export function checkC2(ctx: ScanContext): Check {
   const extracted = ctx.snap.extracted;
   if (!extracted) {
@@ -102,21 +104,32 @@ export function checkC2(ctx: ScanContext): Check {
       const visible = extracted[ctx.products.indexOf(p)] ?? null;
       if (!visible) return { score: null, evidence: evidenceFrom(p.browser, "Sin extracción de la ficha") };
       const m = pickPrimaryProduct(p.page!.products);
-      if (!m) return { score: 0, evidence: evidenceFrom(p.browser, "No hay Offer en el marcado con el que comparar") };
+      if (!m) return { score: 0, evidence: evidenceFrom(p.browser, "No hay Offer en el marcado con el que comparar"), missing: ["sin Offer"] };
       const fields = [
         ["precio", m.price, visible.price, m.price !== null && visible.price !== null && Math.abs(m.price - visible.price) < 0.01],
         ["moneda", m.currency, visible.currency, !!m.currency && m.currency.toUpperCase() === visible.currency?.toUpperCase()],
         ["disponibilidad", m.availability, visible.availability, sameAvailability(m.availability, visible.availability)],
       ] as const;
+      // Un dato del marcado que la ficha no muestra cuenta como discrepancia: es la convención de las etiquetas de Isai.
       return {
         score: fields.filter((f) => f[3]).length / fields.length,
         evidence: evidenceFrom(
           p.browser,
           fields.map(([label, markup, seen, ok]) => `${label}: marcado ${markup ?? "—"}, visible ${seen ?? "—"} ${ok ? "✓" : "✗"}`).join("; "),
         ),
+        missing: fields.filter((f) => !f[3]).map(([label]) => label),
       };
     },
-    () => "El marcado no dice lo mismo que la ficha. Corrige el módulo o la plantilla que genera el Offer para que use el precio final con IVA, la moneda y el stock reales.",
+    (missing) => {
+      const fields = missing.filter((m) => m !== "sin Offer");
+      const parts = [
+        missing.includes("sin Offer") ? "Publica un Offer con precio, moneda y disponibilidad en el bloque Product." : null,
+        fields.length
+          ? `Corrige el módulo o la plantilla que genera el Offer para que ${listEs(fields.map((f) => `${ARTICLE[f]} ${f}`))} ${fields.length > 1 ? "coincidan" : "coincida"} con lo que muestra la ficha.`
+          : null,
+      ];
+      return parts.filter(Boolean).join(" ");
+    },
   );
 }
 
@@ -126,17 +139,34 @@ export function checkC3(ctx: ScanContext): Check {
     ctx,
     (p) => {
       const m = pickPrimaryProduct(p.page!.products);
-      if (!m) return { score: 0, evidence: evidenceFrom(p.browser, "No hay bloque Product") };
+      if (!m) return { score: 0, evidence: evidenceFrom(p.browser, "No hay bloque Product"), missing: ["gtin", "brand", "sku"] };
       const gtinOk = Boolean(m.gtin && m.gtinValid);
       const score = (gtinOk || m.mpn ? 0.5 : 0) + (m.brand ? 0.25 : 0) + (m.sku ? 0.25 : 0);
       const gtin = m.gtin ? (m.gtinValid ? `gtin ${m.gtin} ✓` : `gtin ${m.gtin} ✗ (dígito de control incorrecto)`) : "gtin ✗";
       return {
         score,
         evidence: evidenceFrom(p.browser, `${gtin}, mpn ${m.mpn ? `✓ ${m.mpn}` : "✗"}, brand ${m.brand ? `✓ ${m.brand}` : "✗"}, sku ${m.sku ? `✓ ${m.sku}` : "✗"}`),
+        missing: [
+          ...(gtinOk || m.mpn ? [] : [m.gtin ? "gtin inválido" : "gtin"]),
+          ...(m.brand ? [] : ["brand"]),
+          ...(m.sku ? [] : ["sku"]),
+        ],
       };
     },
-    () =>
-      "Rellena EAN-13 (o MPN), marca y referencia en cada producto del back office y comprueba que el bloque Product los publica como gtin13, mpn, brand y sku.",
+    (missing) => {
+      const ask: [string, string][] = [];
+      if (missing.includes("gtin") || missing.includes("gtin inválido")) ask.push(["EAN-13 o MPN", "gtin13 o mpn"]);
+      if (missing.includes("brand")) ask.push(["marca", "brand"]);
+      if (missing.includes("sku")) ask.push(["referencia", "sku"]);
+      return [
+        missing.includes("gtin inválido") ? "Corrige los EAN con el dígito de control mal." : null,
+        ask.length
+          ? `Rellena ${listEs(ask.map(([bo]) => bo))} en cada producto del back office y comprueba que el bloque Product ${ask.length > 1 ? "los publica" : "lo publica"} como ${listEs(ask.map(([, sd]) => sd))}.`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" ");
+    },
   );
 }
 
@@ -158,9 +188,21 @@ export function checkC4(ctx: ScanContext): Check {
           p.browser,
           `shippingDetails ${shipping ? "✓" : "✗"}, hasMerchantReturnPolicy ${returns ? "✓" : "✗"}, aggregateRating ${rating ? "✓" : "✗"}`,
         ),
+        missing: [...(shipping ? [] : ["shippingDetails"]), ...(returns ? [] : ["hasMerchantReturnPolicy"]), ...(rating ? [] : ["aggregateRating"])],
       };
     },
-    () => "Añade al Offer los gastos de envío (shippingDetails) y la política de devoluciones (hasMerchantReturnPolicy), y publica aggregateRating si tienes valoraciones.",
+    (missing) => {
+      const offer = [
+        missing.includes("shippingDetails") ? "los gastos de envío (shippingDetails)" : null,
+        missing.includes("hasMerchantReturnPolicy") ? "la política de devoluciones (hasMerchantReturnPolicy)" : null,
+      ].filter((x): x is string => !!x);
+      return [
+        offer.length ? `Añade al Offer ${listEs(offer)}.` : null,
+        missing.includes("aggregateRating") ? "Publica aggregateRating si tienes valoraciones." : null,
+      ]
+        .filter(Boolean)
+        .join(" ");
+    },
   );
 }
 
@@ -176,8 +218,15 @@ export function checkC5(ctx: ScanContext): Check {
       return {
         score: ((breadcrumb ? 2 : 0) + (org ? 1 : 0)) / 3,
         evidence: evidenceFrom(p.browser, `BreadcrumbList ${breadcrumb ? "✓" : "✗"}, Organization ${org ? "✓" : "✗"}${homeOrg ? " (en la portada)" : ""}`),
+        missing: [...(breadcrumb ? [] : ["BreadcrumbList"]), ...(org ? [] : ["Organization"])],
       };
     },
-    () => "Publica BreadcrumbList en las fichas y un bloque Organization (u OnlineStore) con nombre, logo y URL en la portada.",
+    (missing) =>
+      [
+        missing.includes("BreadcrumbList") ? "Publica BreadcrumbList en las fichas." : null,
+        missing.includes("Organization") ? "Publica un bloque Organization (u OnlineStore) con nombre, logo y URL en la portada." : null,
+      ]
+        .filter(Boolean)
+        .join(" "),
   );
 }

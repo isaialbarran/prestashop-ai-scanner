@@ -14,7 +14,7 @@ function scriptedLlm(ledger?: CostLedger) {
       structured: (req: StructuredRequest<unknown>) => {
         switch (req.purpose) {
           case "extraction":
-            return { name: "Zapatilla trail Ligera 2", price: 89.9, currency: "EUR", availability: "InStock", gtin: null, brand: "Montaña" };
+            return { name: "Zapatilla trail Ligera 2", price: 89.9, currency: "EUR", availability: "InStock", availabilityText: "En stock", gtin: null, brand: "Montaña" };
           case "queries":
             return {
               category: ["mejor zapatilla de trail", "zapatillas trail baratas", "zapatillas trail barro", "zapatillas trail mujer"],

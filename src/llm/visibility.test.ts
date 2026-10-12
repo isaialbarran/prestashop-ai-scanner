@@ -4,7 +4,7 @@ import { snapshot } from "../../test/snapshot";
 import { BudgetExceededError } from "./cost";
 import type { BuyerQuery } from "./queries";
 import type { Citation } from "./types";
-import { runVisibility, storeCitations, storeIdentity, type StoreIdentity } from "./visibility";
+import { detectMention, runVisibility, storeCitations, storeIdentity, type StoreIdentity } from "./visibility";
 
 const store: StoreIdentity = { domains: ["tienda.test"], names: ["Tienda Test", "tienda.test"] };
 const queries: BuyerQuery[] = [
@@ -80,5 +80,25 @@ describe("runVisibility", () => {
       },
     });
     await expect(runVisibility(queries, store, llm)).rejects.toThrow(BudgetExceededError);
+  });
+});
+
+describe("detectMention", () => {
+  const rama: StoreIdentity = { domains: ["rama.test"], names: ["Rama", "rama.test"] };
+  const llmSays = (quote: string) => fakeLlm({ structured: () => ({ mentioned: true, quote }) });
+
+  it("rechaza una cita literal que no contiene el nombre de la tienda", async () => {
+    const r = await detectMention("Puedes comprarlo en Leroy Merlin o en Bauhaus.", rama, llmSays("Leroy Merlin"));
+    expect(r.mentioned).toBe(false);
+  });
+
+  it("exige el nombre como palabra completa: «Panorama» no es «Rama»", async () => {
+    const r = await detectMention("Lo tienes por 100 € en Panorama.", rama, llmSays("100 € en Panorama"));
+    expect(r.mentioned).toBe(false);
+  });
+
+  it("acepta el nombre o el dominio como palabra completa, sin importar mayúsculas ni acentos", async () => {
+    expect((await detectMention("En RAMA tienen stock.", rama, llmSays("En RAMA tienen stock"))).mentioned).toBe(true);
+    expect((await detectMention("Mira rama.test, envían en 24 h.", rama, llmSays("Mira rama.test"))).mentioned).toBe(true);
   });
 });

@@ -16,6 +16,8 @@ export async function saveReport(client: SupabaseClient, result: ReportResult, c
     answers: result.visibility.total,
     cost_usd: result.cost.totalUsd,
     latency_ms: result.latencyMs,
+    run_tag: result.run.tag,
+    run_index: result.run.index,
     result,
   });
   if (error) throw new Error(`Supabase reports: ${error.message}`);

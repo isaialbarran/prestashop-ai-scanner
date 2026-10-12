@@ -6,14 +6,22 @@ import { evidenceFrom, inconclusive, makeCheck, statusFromScores } from "./helpe
 interface ProductOutcome {
   score: number | null;
   evidence: Evidence;
+  /** Lo que falla en esta ficha; el arreglo nombra solo eso. */
+  missing?: string[];
 }
+
+/** Une lo que falta en las fichas, sin repetir y en el orden en que aparece. */
+const union = (lists: (string[] | undefined)[]) => [...new Set(lists.flatMap((l) => l ?? []))];
+
+/** «a», «a y b», «a, b y c». */
+export const listEs = (items: string[]) => (items.length <= 1 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} y ${items.at(-1)}`);
 
 /** Calcula un check por ficha y promedia (regla del brief para B y C). */
 export function perProduct(
   id: Check["id"],
   ctx: ScanContext,
   evaluate: (p: ProductContext) => ProductOutcome,
-  fix: (score: number) => string | null,
+  fix: (missing: string[], score: number) => string | null,
 ): Check {
   if (ctx.products.length === 0) return inconclusive(id, ctx.snap.origin ?? ctx.snap.domain, "No se encontraron fichas de producto");
   const outcomes = ctx.products.map((p) =>
@@ -31,7 +39,7 @@ export function perProduct(
     status,
     score,
     evidence: outcomes.map((o) => o.evidence),
-    fix: status === "pass" || status === "inconclusive" ? null : fix(score),
+    fix: status === "pass" || status === "inconclusive" ? null : fix(union(outcomes.map((o) => o.missing)), score),
   });
 }
 
@@ -43,17 +51,22 @@ export function checkB1(ctx: ScanContext): Check {
     ctx,
     (p) => {
       const s = p.page!.signals;
-      const found = [s.name, s.price, s.availability].filter(Boolean).length;
+      const fields = [
+        ["el nombre", s.name],
+        ["el precio", s.price],
+        ["la disponibilidad", s.availability],
+      ] as const;
       return {
-        score: found / 3,
+        score: fields.filter(([, v]) => v).length / 3,
         evidence: evidenceFrom(
           p.browser,
           `Nombre ${show(s.name)}, precio ${show(s.price?.text)}, disponibilidad ${show(s.availability?.text)}`,
         ),
+        missing: fields.filter(([, v]) => !v).map(([label]) => label),
       };
     },
-    () =>
-      "Muestra nombre, precio y disponibilidad en el HTML que envía el servidor. Si los pinta JavaScript (tema SPA, módulo de precios dinámicos o carga por AJAX), los rastreadores no los ven.",
+    (missing) =>
+      `Haz que ${listEs(missing)} ${missing.length > 1 ? "salgan" : "salga"} en el HTML que envía el servidor: si ${missing.length > 1 ? "los pinta" : "lo pinta"} JavaScript, los rastreadores no ${missing.length > 1 ? "los" : "lo"} ven.`,
   );
 }
 
@@ -74,9 +87,15 @@ export function checkB2(ctx: ScanContext): Check {
             : "No hay descripción en el HTML inicial",
           d ? { snippet: d.text } : {},
         ),
+        missing: !d ? ["sin descripción"] : length < min ? ["corta"] : [],
       };
     },
-    () =>
-      `Escribe al menos ${min} caracteres de descripción con los atributos que busca un comprador (material, medidas, uso) y asegúrate de que salen en el HTML, no en una pestaña cargada por AJAX.`,
+    (missing) =>
+      [
+        missing.includes("sin descripción") ? "Haz que la descripción salga en el HTML inicial de la ficha: si la carga JavaScript, los rastreadores no la ven." : null,
+        missing.includes("corta") ? `Amplía la descripción de las fichas con menos de ${min} caracteres.` : null,
+      ]
+        .filter(Boolean)
+        .join(" "),
   );
 }

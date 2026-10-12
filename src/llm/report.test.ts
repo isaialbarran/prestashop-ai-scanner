@@ -4,7 +4,7 @@ import { snapshot } from "../../test/snapshot";
 import { runAllChecks } from "../checks/index";
 import { computeScore } from "../scoring/score";
 import type { ScanResult, VisibilityResult } from "../schema";
-import { enforceEvidence, reportContext, splitSentences, writeReport } from "./report";
+import { enforceEvidence, pointsLost, reportContext, splitSentences, writeReport } from "./report";
 
 const ids = new Set(["A2", "C4", "q3"]);
 
@@ -77,5 +77,34 @@ describe("writeReport", () => {
 
   it("el contexto incluye nota, tope y competidores", () => {
     expect(reportContext(scan(), visibility)).toMatch(/Competidores más citados: decathlon\.es \(2\)/);
+  });
+
+  it("el prompt explica ✓ y prohíbe contar, rellenar y afirmar prioridades por su cuenta", async () => {
+    let system = "";
+    const llm = fakeLlm({
+      structured: (req) => {
+        system = req.system;
+        return { headline: "x [q1].", findings: [] };
+      },
+    });
+    await writeReport(scan(), visibility, llm);
+    expect(system).toMatch(/✓/);
+    expect(system).toMatch(/No cuentes/);
+    expect(system).toMatch(/prioridad/i);
+  });
+});
+
+describe("pointsLost", () => {
+  it("ordena por puntos perdidos y deja fuera los checks sin pérdida", () => {
+    const s = scan();
+    const c4 = s.checks.find((c) => c.id === "C4")!;
+    const c3 = s.checks.find((c) => c.id === "C3")!;
+    Object.assign(c4, { status: "fail", points: 0 });
+    Object.assign(c3, { status: "hint", points: 6 });
+    expect(pointsLost(s.checks)).toEqual([
+      { id: "C4", lost: 4 },
+      { id: "C3", lost: 2 },
+    ]);
+    expect(reportContext(s, visibility)).toMatch(/Prioridad técnica \(puntos perdidos\): C4 −4 · C3 −2/);
   });
 });

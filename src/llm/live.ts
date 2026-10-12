@@ -41,9 +41,10 @@ export function createLlmDiskCache(dir = path.join(process.cwd(), ".cache", "llm
   };
 }
 
-export interface LiveLlmOptions {
-  ledger: CostLedger;
+export interface LlmPoolOptions {
   cache?: LlmCache | null;
+  /** Propósitos que no leen la caché (estabilidad: búsquedas nuevas en cada repetición). La respuesta nueva sí se guarda. */
+  freshPurposes?: readonly Purpose[];
   openai?: OpenAI;
   fetchImpl?: typeof fetch;
   /** Para tests: intervalo entre peticiones a Perplexity y base del reintento exponencial. */
@@ -51,9 +52,22 @@ export interface LiveLlmOptions {
   retryBaseMs?: number;
 }
 
+export interface LiveLlmOptions extends LlmPoolOptions {
+  ledger: CostLedger;
+}
+
 const ZERO: Usage = { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, reasoningTokens: 0, searchCalls: 0 };
 
+/** Un Llm con su propio ledger; para varios informes a la vez, usar createLlmPool y compartir las colas. */
 export function createLiveLlm(opts: LiveLlmOptions): Llm {
+  return createLlmPool(opts).forLedger(opts.ledger);
+}
+
+/**
+ * Clientes y colas compartidos por todos los informes de un lote: la concurrencia de OpenAI y el
+ * límite de 1 petición por segundo de Perplexity son por organización, no por informe.
+ */
+export function createLlmPool(opts: LlmPoolOptions): { forLedger(ledger: CostLedger): Llm } {
   let client = opts.openai ?? null;
   const openai = () =>
     (client ??= new OpenAI({
@@ -71,6 +85,7 @@ export function createLiveLlm(opts: LiveLlmOptions): Llm {
 
   /** Ejecuta (o recupera de caché) una petición y registra la llamada en el ledger, también si falla. */
   async function run(
+    ledger: CostLedger,
     purpose: Purpose,
     provider: Provider,
     model: string,
@@ -80,10 +95,10 @@ export function createLiveLlm(opts: LiveLlmOptions): Llm {
   ): Promise<{ response: unknown; call: LlmCall }> {
     const inputHash = createHash("sha256").update(JSON.stringify({ provider, body })).digest("hex");
     const base = { id: randomUUID(), purpose, provider, model, inputHash };
-    const hit = await opts.cache?.get(inputHash);
+    const hit = opts.freshPurposes?.includes(purpose) ? null : await opts.cache?.get(inputHash);
     if (hit) {
       const call: LlmCall = { ...base, startedAt: hit.startedAt, latencyMs: hit.latencyMs, ...measure(hit.response), fromCache: true, error: null, response: hit.response };
-      opts.ledger.add(call);
+      ledger.add(call);
       return { response: hit.response, call };
     }
 
@@ -94,11 +109,11 @@ export function createLiveLlm(opts: LiveLlmOptions): Llm {
       const latencyMs = Math.round(performance.now() - t0);
       await opts.cache?.set(inputHash, { response, latencyMs, startedAt });
       const call: LlmCall = { ...base, startedAt, latencyMs, ...measure(response), fromCache: false, error: null, response };
-      opts.ledger.add(call);
+      ledger.add(call);
       return { response, call };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      opts.ledger.add({ ...base, startedAt, latencyMs: Math.round(performance.now() - t0), usage: ZERO, costUsd: 0, fromCache: false, error: message, response: null });
+      ledger.add({ ...base, startedAt, latencyMs: Math.round(performance.now() - t0), usage: ZERO, costUsd: 0, fromCache: false, error: message, response: null });
       throw err;
     }
   }
@@ -127,7 +142,7 @@ export function createLiveLlm(opts: LiveLlmOptions): Llm {
     }
   }
 
-  return {
+  const forLedger = (ledger: CostLedger): Llm => ({
     async structured(req) {
       const body = {
         model: req.model,
@@ -139,7 +154,7 @@ export function createLiveLlm(opts: LiveLlmOptions): Llm {
         ...(req.model === MODELS.cheap ? { reasoning: { effort: "low" as const } } : {}),
       };
       const { response, call } = await openaiSlots(() =>
-        run(req.purpose, "openai", req.model, body, async () => toJson(await openai().responses.create(body)), openAIMeasure(req.model)),
+        run(ledger, req.purpose, "openai", req.model, body, async () => toJson(await openai().responses.create(body)), openAIMeasure(req.model)),
       );
       const r = response as { status?: string; incomplete_details?: { reason?: string } };
       if (r.status && r.status !== "completed") throw new Error(`Respuesta ${r.status}: ${r.incomplete_details?.reason ?? "sin detalle"}`);
@@ -150,19 +165,20 @@ export function createLiveLlm(opts: LiveLlmOptions): Llm {
       if (req.provider === "openai") {
         const body = openAISearchBody(req.model, req.query);
         const { response, call } = await openaiSlots(() =>
-          run("visibility", "openai", req.model, body, async () => toJson(await openai().responses.create(body)), openAIMeasure(req.model)),
+          run(ledger, "visibility", "openai", req.model, body, async () => toJson(await openai().responses.create(body)), openAIMeasure(req.model)),
         );
         return { answer: parseOpenAISearch(response, req.model), call };
       }
       const body = perplexityBody(req.model, req.query);
-      const { response, call } = await run("visibility", "perplexity", req.model, body, () => postPerplexity(body), (response) => {
+      const { response, call } = await run(ledger, "visibility", "perplexity", req.model, body, () => postPerplexity(body), (response) => {
         const { usage, reportedCostUsd } = perplexityUsage(response);
         return { usage, costUsd: reportedCostUsd ?? costUsd("perplexity", req.model, usage) };
       });
       const answer: SearchAnswer = parsePerplexity(response, req.model);
       return { answer, call };
     },
-  };
+  });
+  return { forLedger };
 }
 
 /** Copia serializable de la respuesta del SDK (lo que se cachea y se guarda en llm_calls). */
