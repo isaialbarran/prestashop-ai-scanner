@@ -10,6 +10,9 @@ export function loadSnapshot(domain: string, dir = SNAPSHOTS_DIR): ScanSnapshot 
   return existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as ScanSnapshot) : null;
 }
 
+/** Etiqueta de los informes que `pnpm eval:replay` rehace sin red: no son ejecuciones reales y no cuentan en coste. */
+export const REPLAY_TAG = "replay";
+
 export interface StoredReport {
   /** Ruta relativa a REPORTS_DIR sin extensión, p. ej. `stability/lylotools.es-2`: identifica el informe. */
   file: string;

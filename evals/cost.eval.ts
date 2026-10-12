@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { costLatency } from "../src/evals/metrics";
-import { listReports } from "../src/evals/sources";
+import { listReports, REPLAY_TAG } from "../src/evals/sources";
 import { missing } from "./lib";
 import { record } from "./record";
 
@@ -9,7 +9,10 @@ const MAX_EUR = 1;
 const MAX_SECONDS = 180;
 
 it(NAME, () => {
-  const reports = listReports().map((r) => r.report);
+  // Los informes rehechos sin red solo pagan detección y redacción: falsearían el coste por informe.
+  const reports = listReports()
+    .map((r) => r.report)
+    .filter((r) => r.run.tag !== REPLAY_TAG);
   const c = costLatency(reports);
   if (!c.reports) {
     record({ order: 6, eval: NAME, dataset: "—", metric: "€ y s por informe (p50 · p95)", value: "—", threshold: "p95 < 1 € y < 3 min", status: "sin datos" });

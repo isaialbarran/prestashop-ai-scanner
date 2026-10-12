@@ -20,7 +20,8 @@
     "eval:import": "tsx --env-file-if-exists=.env.local scripts/eval-import.ts",
     "label": "tsx --env-file-if-exists=.env.local scripts/label.ts",
     "eval:errors": "tsx --env-file-if-exists=.env.local scripts/eval-errors.ts",
-    "eval:refresh": "tsx --env-file-if-exists=.env.local scripts/eval-refresh.ts"
+    "eval:refresh": "tsx --env-file-if-exists=.env.local scripts/eval-refresh.ts",
+    "eval:replay": "tsx --env-file-if-exists=.env.local scripts/eval-replay.ts"
   },
   "packageManager": "pnpm@10.32.1",
   "engines": {

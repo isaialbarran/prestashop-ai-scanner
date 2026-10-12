@@ -33,21 +33,24 @@ pnpm batch data/private/estabilidad.csv --mode report --tag stability --repeat 2
 pnpm eval:prepare checks data/private/eval-tiendas.csv
 pnpm eval:prepare extraction data/private/eval-tiendas.csv --n 50
 pnpm eval:prepare detection --from stability --n 100
-pnpm eval:prepare fidelity --from stability --n 20
+pnpm eval:prepare fidelity --from fidelity-v2 --n 20   # informes v2 rehechos en el paso 5
 
 # 3. Etiquetado (Isai): asistente en la terminal, un caso cada vez; q para salir y al volver sigue donde lo dejaste
 pnpm label checks       # 90 casos: ¿tiene razón el escáner? (a abre las fichas en el navegador)
 pnpm label extraction   # 50 fichas: abre la vista como bot y pregunta nombre, precio, moneda…
 pnpm label detection    # 100 respuestas: ¿cita o nombra la tienda?
-pnpm label fidelity     # 182 frases: ¿la evidencia respalda la frase?
+pnpm label fidelity     # 174 frases de los informes v2: ¿la evidencia respalda la frase?
 #    Alternativa: rellenar los *.todo.csv en una hoja de cálculo e importarlos con pnpm eval:import <tipo> <csv>
 
 # 4. Resultado
 pnpm eval
 pnpm eval:errors        # cada fallo con su contexto, en data/private/evals/errores.md
 
-# 5. Tras cambiar el prompt de extracción: rehace la extracción de los snapshots sin red (C2 la usa)
-pnpm eval:refresh data/private/eval-tiendas.csv
+# 5. Tras cambiar un prompt: sin red y casi gratis
+pnpm eval:refresh data/private/eval-tiendas.csv                  # rehace la extracción de los snapshots (C2 la usa)
+pnpm eval:replay --from stability --runs 1,2 --out fidelity-v2  # rehace checks, detección e informe con las búsquedas guardadas
+pnpm eval:prepare fidelity --from fidelity-v2                    # plantilla de fidelidad sobre esos informes
+#    (los informes rehechos llevan run.tag «replay» y no cuentan en el eval de coste)
 
 # 6. Revisión de etiquetas dudosas (Isai): los casos de data/private/evals/revisar.json, con tu etiqueta y el motivo
 pnpm label extraction --revisar
