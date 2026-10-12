@@ -1,6 +1,6 @@
 # Criterios de etiquetado
 
-Etiqueta lo que es verdad, no lo que crees que dirá el escáner. En extracción y detección, la plantilla no muestra lo que predijo el sistema, para que la etiqueta no se ancle a su respuesta.
+Etiqueta lo que es verdad, no lo que crees que dirá el escáner. **Sin ayuda de un LLM**, ni para decidir ni para redactar la nota: los evals miden justo si los LLM del sistema aciertan, y si los juzga otro LLM solo miden cuánto se parecen dos modelos. En extracción y detección, la plantilla no muestra lo que predijo el sistema, para que la etiqueta no se ancle a su respuesta.
 
 Lo normal es etiquetar con el asistente (`pnpm label checks|extraction|detection|fidelity`), que hace las preguntas de esta guía caso a caso. Si prefieres hoja de cálculo: en `de_acuerdo`, `revisada` y `respaldada` vale `sí`/`si`/`s`/`x` o `no`/`n`. Las filas con esa columna vacía no se importan, así que puedes etiquetar por partes. Las celdas vacías cuentan como `null`. El precio admite coma o punto decimal.
 

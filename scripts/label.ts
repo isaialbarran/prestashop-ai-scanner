@@ -95,6 +95,7 @@ if (reviewMode) await review();
 else {
   const pending = items.filter((i) => !done().has(i.id));
   console.log(`${done().size} de ${items.length} ya etiquetados · ${pending.length} pendientes. Criterios completos: evals/GUIDELINES.md`);
+  console.log(dim("Etiqueta tú, sin pasar los casos a un LLM: el eval mide justo si un LLM acierta."));
   await ask(dim("Enter para empezar… "));
   for (const item of pending) {
     console.clear();

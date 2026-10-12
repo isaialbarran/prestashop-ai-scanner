@@ -31,11 +31,11 @@
     {
       "order": 4,
       "eval": "Fidelidad del informe",
-      "dataset": "20 informes",
-      "metric": "% frases respaldadas (juicio humano)",
-      "value": "90.1 % (164/182); borrador con referencia válida 100 %",
+      "dataset": "—",
+      "metric": "% frases respaldadas",
+      "value": "—",
       "threshold": "100 %",
-      "status": "falla"
+      "status": "sin datos"
     },
     {
       "order": 5,

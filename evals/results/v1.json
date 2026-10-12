@@ -33,9 +33,9 @@
       "eval": "Fidelidad del informe",
       "dataset": "20 informes",
       "metric": "% frases respaldadas (juicio humano)",
-      "value": "90.1 % (164/182); borrador con referencia válida 100 %",
+      "value": "no válido: etiquetas hechas con ayuda de un LLM (90.1 %, 164/182)",
       "threshold": "100 %",
-      "status": "falla"
+      "status": "no válido"
     },
     {
       "order": 5,
